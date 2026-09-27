@@ -1,0 +1,97 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import * as babel from '@babel/core';
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+
+const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+const CORE_SCRIPT_PATHS = [
+  'core/zmk/naming.js', 'core/zmk/layerPointers.js',
+  'core/keycodes/zmkMap.js', 'core/keycodes/modChain.js',
+  'core/geometry/convertGeo.js', 'core/geometry/glove80.js', 'core/geometry/go60.js',
+  'core/gc.js', 'core/usage.js', 'core/slots.js', 'core/describe.js', 'core/layerShift.js',
+];
+
+let compiledAppCache = null;
+function getCompiledApp() {
+  if (compiledAppCache) return compiledAppCache;
+  const html = readFileSync(path.join(repoRoot, 'glide.html'), 'utf8');
+  const startTag = '<script type="text/babel">';
+  const start = html.indexOf(startTag) + startTag.length;
+  const end = html.indexOf('</script>', start);
+  const code = html.slice(start, end);
+  const { code: compiled } = babel.transformSync(code, {
+    presets: [['@babel/preset-react', { runtime: 'classic' }]],
+  });
+  compiledAppCache = compiled;
+  return compiled;
+}
+
+/**
+ * Mounts the real glide.html app (compiled exactly as the browser's Babel Standalone
+ * would) into the current jsdom document. Call once per test, typically in beforeEach —
+ * each call gets a fresh #root and a fresh React tree, so tests don't leak state.
+ */
+export async function mountGlideApp() {
+  document.body.innerHTML = '<div id="root"></div>';
+
+  window.React = React;
+  window.ReactDOM = ReactDOM;
+
+  // jsdom doesn't implement ResizeObserver or real layout geometry — same stubs used
+  // to prove the fixes interactively earlier this session.
+  window.ResizeObserver = class {
+    constructor(cb) { this.cb = cb; }
+    observe(el) { this.cb([{ target: el, contentRect: el.getBoundingClientRect() }]); }
+    disconnect() {} unobserve() {}
+  };
+  window.HTMLElement.prototype.getBoundingClientRect = function () {
+    return { width: 1200, height: 800, top: 0, left: 0, right: 1200, bottom: 800 };
+  };
+  window.confirm = () => true;
+  window.alert = () => {};
+
+  for (const p of CORE_SCRIPT_PATHS) {
+    const src = readFileSync(path.join(repoRoot, p), 'utf8');
+    new Function(src).call(window);
+  }
+
+  const compiled = getCompiledApp();
+  new Function(compiled).call(window);
+
+  // React 18's createRoot().render() doesn't commit synchronously — give it a tick before
+  // returning, so callers can immediately query the DOM without their own boilerplate delay.
+  await delay(50);
+}
+
+export const delay = (ms = 50) => new Promise((res) => setTimeout(res, ms));
+export const q = (sel) => document.querySelector(sel);
+export const qa = (sel) => Array.from(document.querySelectorAll(sel));
+export const byText = (tag, text) => qa(tag).find((el) => el.textContent.trim() === text);
+export const byTitle = (title) => qa('button').find((b) => b.title === title);
+export const keyEl = (idx) => qa('[data-key-idx]').find((el) => el.dataset.keyIdx === String(idx));
+
+export async function click(el) {
+  if (!el) throw new Error('click(): target element was null — check the selector that produced it');
+  el.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await delay();
+}
+
+export async function loadFixtureFile(fixtureName) {
+  const jsonText = readFileSync(path.join(repoRoot, 'tests', 'fixtures', fixtureName), 'utf8');
+  const fileInput = q('input[type="file"]');
+  const file = new window.File([jsonText], fixtureName, { type: 'application/json' });
+  Object.defineProperty(fileInput, 'files', { value: [file], writable: false });
+  fileInput.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await delay(150);
+}
+
+/** Reads the currently-selected key/combo's binding via the app's own JSON tab, then returns to Keymap. */
+export async function readCurrentBindingJson() {
+  await click(byTitle('JSON'));
+  const value = q('textarea').value;
+  await click(byTitle('Keymap'));
+  return JSON.parse(value);
+}
