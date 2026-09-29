@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mountGlideApp, loadFixtureFile, click, qa, byTitle, keyEl, readCurrentBindingJson } from './testAppHarness.js';
+import { mountGlideApp, loadFixtureFile, click, qa, byTitle, byText, keyEl, readCurrentBindingJson, delay } from './testAppHarness.js';
 
 describe('Detach & Customize', () => {
   beforeEach(async () => {
@@ -16,6 +16,10 @@ describe('Detach & Customize', () => {
     const detachBtn = qa('button').find((b) => b.textContent.includes('⑂'));
     expect(detachBtn).toBeTruthy();
     await click(detachBtn);
+    // This behavior is shared by more than one key, so detaching confirms through GLIDE's own
+    // in-app ConfirmDialog (not a native window.confirm()) before actually going through.
+    await delay(50);
+    await click(byText('button', 'Detach'));
 
     const key10After = await readCurrentBindingJson();
     expect(key10After.value).not.toBe('&strong');

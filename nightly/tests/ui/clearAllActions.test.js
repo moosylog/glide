@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mountGlideApp, loadFixtureFile, click, byTitle, keyEl, readCurrentBindingJson } from './testAppHarness.js';
+import { mountGlideApp, loadFixtureFile, click, byTitle, byText, keyEl, readCurrentBindingJson, delay } from './testAppHarness.js';
 
 describe('Clear All Actions', () => {
   beforeEach(async () => {
@@ -15,6 +15,10 @@ describe('Clear All Actions', () => {
     expect(original).toEqual({ value: '&kp', params: [{ value: 'N0' }] });
 
     await click(byTitle('Clear All Actions'));
+    // "Clear All Actions" now confirms through GLIDE's own in-app ConfirmDialog rather than a
+    // native window.confirm() popup — click its "Clear" button to actually go through with it.
+    await delay(50);
+    await click(byText('button', 'Clear'));
 
     const afterClear = await readCurrentBindingJson();
     expect(afterClear).toEqual({ value: '&none' });

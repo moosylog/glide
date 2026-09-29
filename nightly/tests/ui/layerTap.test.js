@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mountGlideApp, loadFixtureFile, click, qa, byTitle, keyEl, readCurrentBindingJson } from './testAppHarness.js';
+import { mountGlideApp, loadFixtureFile, click, qa, byTitle, byText, keyEl, readCurrentBindingJson, delay } from './testAppHarness.js';
 
 describe('Layer-Tap on an empty key', () => {
   beforeEach(async () => {
@@ -11,6 +11,9 @@ describe('Layer-Tap on an empty key', () => {
   it('REGRESSION: hold survives being combined with a tap assigned afterward, starting from a genuinely empty key', async () => {
     await click(keyEl(20));
     await click(byTitle('Clear All Actions'));
+    // Confirms through GLIDE's own in-app ConfirmDialog now, not a native window.confirm().
+    await delay(50);
+    await click(byText('button', 'Clear'));
     expect(await readCurrentBindingJson()).toEqual({ value: '&none' });
 
     // Use the dedicated "Layer-Tap (&lt)" button, not the generic "Momentary" one (which
