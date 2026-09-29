@@ -139,6 +139,7 @@
     <div id="root" class="h-screen w-screen flex overflow-hidden text-app-text bg-app-base transition-colors duration-300"></div>
         <script src="core/zmk/naming.js"></script>
     <script src="core/zmk/layerPointers.js"></script>
+    <script src="core/zmk/combos.js"></script>
     <script src="core/keycodes/zmkMap.js"></script>
     <script src="core/keycodes/modChain.js"></script>
     <script src="core/geometry/convertGeo.js"></script>
@@ -149,6 +150,22 @@
     <script src="core/slots.js"></script>
     <script src="core/describe.js"></script>
     <script src="core/layerShift.js"></script>
+    <script src="core/behaviors/schemas.js"></script>
+    <script src="core/behaviors/registry.js"></script>
+    <script src="core/behaviors/compile.js"></script>
+    <script src="core/io/layoutSchema.js"></script>
+    <script src="core/io/loadLayout.js"></script>
+    <script src="core/io/exportLayout.js"></script>
+    <script src="core/capabilities/paramBinding.js"></script>
+    <script src="core/capabilities/catalogSchema.js"></script>
+    <!-- Same jq-web build (0.5.1) and loading approach as the Flows4JSON app this catalog comes
+         from (github.com/moosylog/flows4json) — its jq.json(input, script) resolves a Promise
+         once the wasm binary finishes loading, which is what core/capabilities/jqRunner.js
+         expects from window.jq. -->
+    <script src="https://cdn.jsdelivr.net/npm/jq-web@0.5.1/jq.wasm.js"></script>
+    <script src="core/capabilities/jqRunner.js"></script>
+    <script src="core/capabilities/applyFlow.js"></script>
+    <script src="core/capabilities/builtinCatalog.js"></script>
     <script type="text/babel">
 
 
@@ -166,6 +183,7 @@ const { useState, useEffect, useMemo, useCallback, memo, useRef } = React;
             stripGlideMmPrefix,
             stripTdPrefix,
             LAYER_POINTER_BEHAVIORS,
+            MAX_COMBO_KEYS,
             RAW_MOD_CODES,
             ZMK_MAP,
             MOD_WRAPPER_TO_FULL,
@@ -204,7 +222,26 @@ const { useState, useEffect, useMemo, useCallback, memo, useRef } = React;
             formatParam,
             formatParamFull,
             describeBinding,
-            shiftLayerPointers
+            shiftLayerPointers,
+            BehaviorSchemas,
+            getBehaviorSchema,
+            getAllBehaviorSchemas,
+            getDefaultValues,
+            coercePropertyValue,
+            compileBehaviorProperty,
+            compileBehaviorProperties,
+            LAYOUT_SCHEMA_FIELDS,
+            validateLayout,
+            loadLayoutObject,
+            parseLayoutJson,
+            serializeLayout,
+            getExportFilename,
+            buildScriptWithParams,
+            parseCatalog,
+            isFlowCompatible,
+            runJqScript,
+            applyFlow,
+            BUILTIN_FLOWS_CATALOG
         } = window.GlideCore;
 
 
@@ -271,6 +308,314 @@ const { useState, useEffect, useMemo, useCallback, memo, useRef } = React;
                 </div>
             );
         });
+
+        // DynamicBehaviorForm — renders a behavior's settings panel entirely from its
+        // core/behaviors/schemas.js entry, so a new/tuned property (a .toml-plan-equivalent
+        // change, just plain JS data instead) never needs a JSX change here. Values are read
+        // straight off the real behavior object (values) and written back through onChange
+        // exactly like updateBehaviorSetting always has — this form doesn't introduce a new
+        // write path, just a generic render path over the existing one.
+        const DynamicBehaviorForm = ({ behaviorId, values, onChange, keyboardGeo }) => {
+            const schema = getBehaviorSchema(behaviorId);
+            if (!schema) return null;
+
+            const renderWidget = (prop) => {
+                const raw = values?.[prop.key];
+                const current = raw === undefined ? prop.default : raw;
+                const commit = (nextRaw) => onChange(prop.key, compileBehaviorProperty(behaviorId, prop.key, nextRaw));
+
+                switch (prop.widget) {
+                    case 'select':
+                        return (
+                            <select className="w-full bg-app-surface border border-app-borderHighlight p-2 rounded-lg text-xs text-app-text outline-none" value={current} onChange={(e) => commit(e.target.value)}>
+                                {(prop.options || []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                        );
+                    case 'slider':
+                        return (
+                            <div className="flex items-center gap-3">
+                                <input type="range" min={prop.min} max={prop.max} step={prop.step || 1} value={current} onChange={(e) => commit(e.target.value)} className="w-full accent-app-accent" />
+                                <span className="text-xs font-mono text-app-textMuted w-14 text-right shrink-0">{current}{prop.unit || ''}</span>
+                            </div>
+                        );
+                    case 'number_input':
+                        return (
+                            <div className="flex bg-app-surface border border-app-borderHighlight rounded-lg overflow-hidden">
+                                <input type="number" min={prop.min} max={prop.max} step={prop.step || 1} className="w-full bg-transparent p-2 text-xs font-mono text-app-text outline-none" value={current} onChange={(e) => commit(e.target.value)} />
+                                {prop.unit && <span className="p-2 text-xs text-app-textMuted font-mono">{prop.unit}</span>}
+                            </div>
+                        );
+                    case 'toggle':
+                        return (
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <input type="checkbox" checked={!!current} onChange={(e) => commit(e.target.checked)} className="accent-app-accent" />
+                                <span className="text-xs text-app-textMuted group-hover:text-app-text transition-colors">{prop.label}</span>
+                            </label>
+                        );
+                    case 'keyboard_picker':
+                        return (
+                            <MiniKeyboardMap geo={keyboardGeo} selectedKeys={current || []} onKeyToggle={(kIdx) => {
+                                const next = (current || []).includes(kIdx) ? current.filter((k) => k !== kIdx) : [...(current || []), kIdx];
+                                commit(next);
+                            }} />
+                        );
+                    case 'text':
+                    default:
+                        return (
+                            <input type="text" value={current ?? ''} onChange={(e) => commit(e.target.value)} className="bg-app-surface border border-app-borderHighlight text-app-text text-xs rounded-lg px-3 py-2 outline-none w-full font-mono" />
+                        );
+                }
+            };
+
+            const basicProps = schema.properties.filter((p) => !p.advanced);
+            const advancedProps = schema.properties.filter((p) => p.advanced);
+            const [showAdvanced, setShowAdvanced] = useState(false);
+
+            // Compact widgets (toggle, number_input) look right sharing a row two-at-a-time —
+            // the way the hand-authored hold-tap panel always paired Tapping Term/Quick Tap and
+            // Retro Tap/Trigger on Release; every other widget gets its own full-width row.
+            const PAIRABLE = new Set(['toggle', 'number_input']);
+            const rows = [];
+            let i = 0;
+            while (i < basicProps.length) {
+                const p = basicProps[i];
+                const next = basicProps[i + 1];
+                if (PAIRABLE.has(p.widget) && next?.widget === p.widget) {
+                    rows.push({ pair: [p, next] });
+                    i += 2;
+                } else {
+                    rows.push({ single: p });
+                    i += 1;
+                }
+            }
+
+            return (
+                <div className="flex flex-col gap-4">
+                    {rows.map((row, rIdx) => row.pair ? (
+                        row.pair[0].widget === 'toggle' ? (
+                            <div key={rIdx} className="flex justify-between mt-1">
+                                {row.pair.map((p) => <React.Fragment key={p.key}>{renderWidget(p)}</React.Fragment>)}
+                            </div>
+                        ) : (
+                            <div key={rIdx} className="flex gap-4">
+                                {row.pair.map((p) => (
+                                    <div key={p.key} className="flex flex-col flex-1 gap-1.5">
+                                        <label className="text-[10px] uppercase tracking-widest text-app-textMuted font-bold">{p.label}</label>
+                                        {renderWidget(p)}
+                                    </div>
+                                ))}
+                            </div>
+                        )
+                    ) : (
+                        <div key={rIdx} className="flex flex-col gap-1.5">
+                            {row.single.widget !== 'toggle' && <label className="text-[10px] uppercase tracking-widest text-app-textMuted font-bold">{row.single.label}</label>}
+                            {row.single.description && row.single.widget === 'keyboard_picker' && <p className="text-[10px] text-app-textMuted leading-tight mb-1">{row.single.description}</p>}
+                            {renderWidget(row.single)}
+                        </div>
+                    ))}
+                    {advancedProps.length > 0 && (
+                        <div className="pt-2 border-t border-app-borderHighlight">
+                            <button onClick={() => setShowAdvanced((s) => !s)} className="text-[10px] uppercase font-bold text-app-textMuted hover:text-app-text transition-colors flex items-center gap-1">
+                                {showAdvanced ? '▾' : '▸'} Advanced
+                            </button>
+                            {showAdvanced && (
+                                <div className="flex flex-col gap-4 mt-3">
+                                    {advancedProps.map((p) => (
+                                        <div key={p.key} className="flex flex-col gap-1.5">
+                                            <label className="text-[10px] uppercase tracking-widest text-app-textMuted font-bold">{p.label}</label>
+                                            {p.description && <p className="text-[10px] text-app-textMuted leading-tight mb-1">{p.description}</p>}
+                                            {renderWidget(p)}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // Renders a form for one Flows-package's [[param]] declarations (id/label/type/options/
+        // labels/default — the shape build-catalog.js actually produces from real .flows files,
+        // distinct from BehaviorSchemas' key/widget/min/max shape above, so this stays its own
+        // small component rather than being forced through DynamicBehaviorForm).
+        const FlowParamForm = ({ params, values, onChange }) => {
+            if (!params || params.length === 0) return null;
+            return (
+                <div className="flex flex-col gap-3">
+                    {params.map((p) => {
+                        const current = values?.[p.id] !== undefined ? values[p.id] : p.default;
+                        return (
+                            <div key={p.id} className="flex flex-col gap-1.5">
+                                {p.type !== 'boolean' && <label className="text-[10px] uppercase tracking-widest text-app-textMuted font-bold">{p.label || p.id}</label>}
+                                {p.type === 'boolean' ? (
+                                    <label className="flex items-center gap-2 cursor-pointer group">
+                                        <input type="checkbox" checked={!!current} onChange={(e) => onChange(p.id, e.target.checked)} className="accent-app-accent" />
+                                        <span className="text-xs text-app-textMuted group-hover:text-app-text transition-colors">{p.label || p.id}</span>
+                                    </label>
+                                ) : p.type === 'number' ? (
+                                    <input type="number" value={current ?? ''} onChange={(e) => onChange(p.id, e.target.value === '' ? '' : Number(e.target.value))} className="bg-app-surface border border-app-borderHighlight text-app-text text-xs rounded-lg px-3 py-2 outline-none w-full font-mono" />
+                                ) : p.type === 'select' ? (
+                                    <select value={current ?? ''} onChange={(e) => onChange(p.id, e.target.value)} className="w-full bg-app-surface border border-app-borderHighlight p-2 rounded-lg text-xs text-app-text outline-none">
+                                        {(p.options || []).map((opt, i) => <option key={opt} value={opt}>{(p.labels && p.labels[i]) || opt}</option>)}
+                                    </select>
+                                ) : (
+                                    <input type="text" value={current ?? ''} onChange={(e) => onChange(p.id, e.target.value)} className="bg-app-surface border border-app-borderHighlight text-app-text text-xs rounded-lg px-3 py-2 outline-none w-full font-mono" />
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            );
+        };
+
+        // Browse-and-apply UI for Capabilities (GLIDE's user-facing name for what core/
+        // capabilities/*.js calls Flows — a one-shot jq mutation, not a persisted install).
+        // Deliberately a modal, not a left-nav tab beside Layers/Combos: those two are places
+        // you spend the whole editing session flipping between; a Capability is an occasional
+        // "run this against my layout" action, over almost as soon as it's opened, so giving it
+        // equal, permanent real estate in the same tri-tab misrepresented it as a third editing
+        // mode. `runLog` (kept by the caller, across opens) is what makes a jq failure — often a
+        // cryptic message like "Cannot iterate over null (null)" — inspectable after the fact,
+        // rather than only a 2.2s toast the user has to read in time.
+        // A single app-store-style tile — one per category, shown on the top-level browse
+        // screen. Picking an icon per category (rather than trusting each flow's own icon,
+        // which is really about the individual automation) keeps the grid glanceable.
+        const FLOW_CATEGORY_ICONS = {
+            'Home-Row Mods': '⌨️', 'Decorations & RGB': '💡', 'Special keys': '🎹', 'Autoshift': '⇪',
+            'Gaming': '🎮', 'macOS': '🍎', 'QWERTY Alternatives': '🔠', 'Mouse Controls': '🖱️',
+            'Symbols': '🔣',
+        };
+
+        // A short "which keyboard(s)" label — shown on every list row and detail view so
+        // compatibility is visible while browsing, not just as a warning after drilling in.
+        const flowHardwareLabel = (entry) => {
+            const kbs = entry.manifest.keyboards;
+            if (!kbs || kbs.length === 0) return 'Go60 · Glove80';
+            const names = kbs.map((k) => (k === 'go60' ? 'Go60' : k === 'glove80' ? 'Glove80' : k));
+            return kbs.length > 1 ? names.join(' · ') : `${names[0]} only`;
+        };
+
+        const CapabilitiesModal = ({
+            isOpen, onClose, config, catalog,
+            selectedCategory, onSelectCategory, selectedUid, onSelectUid,
+            paramValues, onParamChange, isApplying, onApply,
+            searchText, onSearchTextChange, results,
+        }) => {
+            if (!isOpen) return null;
+            const selected = catalog.find((f) => f.uid === selectedUid) || null;
+            const searching = searchText.trim().length > 0;
+            const filtered = catalog.filter((f) => {
+                if (!searching) return f.category === selectedCategory;
+                const q = searchText.toLowerCase();
+                return f.title.toLowerCase().includes(q) || f.subtitle.toLowerCase().includes(q) || f.category.toLowerCase().includes(q);
+            });
+            const categories = [...new Set(catalog.map((f) => f.category))];
+            const countByCategory = {};
+            catalog.forEach((f) => { countByCategory[f.category] = (countByCategory[f.category] || 0) + 1; });
+
+            // Three screens share this one modal: the category grid (the app-store "home"),
+            // a category's own list of automations, and one automation's detail + result box.
+            let body;
+            if (selected) {
+                const result = results[selected.uid];
+                body = (
+                    <div className="flex flex-col gap-4">
+                        <button onClick={() => onSelectUid(null)} className="text-[11px] font-bold text-app-textMuted hover:text-app-text transition-colors flex items-center gap-1 self-start">← Back to {selected.category}</button>
+                        <div className="flex items-start gap-3">
+                            <span className="text-2xl shrink-0">{selected.manifest.icon}</span>
+                            <div className="min-w-0">
+                                <div className="font-bold text-sm text-app-text">{selected.title}</div>
+                                {selected.subtitle && <div className="text-xs text-app-textMuted">{selected.subtitle}</div>}
+                                <div className="text-[10px] text-app-textMuted/70 mt-0.5">{flowHardwareLabel(selected)}</div>
+                            </div>
+                        </div>
+                        {selected.description && <p className="text-xs text-app-textMuted leading-relaxed whitespace-pre-wrap">{selected.description}</p>}
+                        <FlowParamForm
+                            params={selected.param}
+                            values={paramValues[selected.uid]}
+                            onChange={(id, val) => onParamChange(selected.uid, id, val)}
+                        />
+                        <button onClick={() => onApply(selected)} disabled={isApplying} className="btn-active font-bold py-2.5 rounded-xl text-center transition-all border-none shadow-lg hover:-translate-y-px text-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0">
+                            {isApplying ? 'Applying…' : 'Apply to Layout'}
+                        </button>
+                        {/* The result box: what happened the last time this automation ran, kept
+                            visible right here rather than in a log elsewhere, since this is where
+                            the user is looking when they need to know it worked (or why not). */}
+                        {result && (
+                            <div className={`text-[11px] rounded-lg px-3 py-2.5 border ${result.ok ? 'border-emerald-600/30 bg-emerald-950/30 text-emerald-200' : 'border-red-600/30 bg-red-950/40 text-red-200'}`}>
+                                <div className="font-bold flex items-center gap-1.5">{result.ok ? '✓ Success' : '✕ Error'}</div>
+                                {result.message && <div className={`mt-1 leading-snug break-words select-text ${result.ok ? '' : 'font-mono'}`}>{result.message}</div>}
+                            </div>
+                        )}
+                    </div>
+                );
+            } else if (selectedCategory || searching) {
+                body = (
+                    <div className="flex flex-col gap-1.5">
+                        <button onClick={() => onSelectCategory(null)} className="text-[11px] font-bold text-app-textMuted hover:text-app-text transition-colors flex items-center gap-1 self-start mb-1">← All categories</button>
+                        {!searching && <div className="text-[10px] uppercase tracking-widest text-app-textMuted font-bold px-1">{selectedCategory}</div>}
+                        {filtered.length === 0 && <div className="text-app-textMuted text-xs italic text-center py-4">No Flows Automations match your search.</div>}
+                        {filtered.map((f) => (
+                            <div key={f.uid} onClick={() => onSelectUid(f.uid)} className="flex items-center gap-3 p-2.5 rounded-xl text-xs transition-all border cursor-pointer border-transparent hover:border-app-borderHighlight hover:bg-app-surface">
+                                <span className="text-xl shrink-0">{f.manifest.icon}</span>
+                                <div className="min-w-0 flex-1">
+                                    <div className="font-bold text-app-text truncate">{f.title}</div>
+                                    {f.subtitle && <div className="text-app-textMuted truncate">{f.subtitle}</div>}
+                                    {searching && <div className="text-app-textMuted/70 truncate">{f.category}</div>}
+                                </div>
+                                <span className="text-[9px] text-app-textMuted/70 shrink-0 whitespace-nowrap">{flowHardwareLabel(f)}</span>
+                            </div>
+                        ))}
+                    </div>
+                );
+            } else {
+                // The app-store "home" screen: a grid of category tiles, not a flat list.
+                body = (
+                    <div className="grid grid-cols-2 gap-3">
+                        {categories.map((category) => (
+                            <div key={category} onClick={() => onSelectCategory(category)} className="flex flex-col items-start gap-2 p-4 rounded-2xl border border-app-borderHighlight bg-app-card hover:bg-app-surface hover:-translate-y-px cursor-pointer transition-all">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-2xl">{FLOW_CATEGORY_ICONS[category] || '⚙️'}</span>
+                                    {/* A little preview of what's inside — the app-store touch that makes a tile feel
+                                        browsable rather than just a filing label. */}
+                                    <span className="text-sm opacity-60">
+                                        {catalog.filter((f) => f.category === category).slice(0, 3).map((f) => f.manifest.icon).join(' ')}
+                                    </span>
+                                </div>
+                                <div className="font-bold text-sm text-app-text leading-tight">{category}</div>
+                                <div className="text-[10px] text-app-textMuted">{countByCategory[category]} {countByCategory[category] === 1 ? 'automation' : 'automations'}</div>
+                            </div>
+                        ))}
+                    </div>
+                );
+            }
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md" onClick={onClose}>
+                    <div className="bg-app-surface border border-app-borderHighlight rounded-2xl shadow-2xl p-6 max-w-lg w-full mx-4 max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-4 shrink-0">
+                            <h3 className="text-xl font-bold text-app-text flex items-center gap-2">
+                                <svg className="w-6 h-6 text-app-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                                Flows Automations
+                            </h3>
+                            <button onClick={onClose} className="text-app-textMuted hover:text-app-text text-xl">&times;</button>
+                        </div>
+
+                        {!selected && (
+                            <div className="relative mb-3 shrink-0">
+                                <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-app-textMuted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                <input type="text" value={searchText} onChange={(e) => onSearchTextChange(e.target.value)} placeholder="Search Flows Automations..." className="w-full bg-app-card border border-app-borderHighlight rounded-lg pl-8 pr-3 py-1.5 text-[11px] text-app-text placeholder-app-textMuted outline-none focus:border-app-text transition-colors" />
+                            </div>
+                        )}
+
+                        <div className="flex-1 overflow-y-auto min-h-0 -mx-2 px-2">
+                            {body}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
 
         // The Omni-Shift Engine: Protects Keycaps & Combos during Layer changes.
 
@@ -438,7 +783,7 @@ const { useState, useEffect, useMemo, useCallback, memo, useRef } = React;
             );
         });
 
-const KeyboardContainer = ({ keyboardGeo, activeLayerBindings, selectedKey, onSelectKey, scale, setScale, osMode, onContextAction, clipboard, styleClipboard, onSwapKeys, showLeds, undo, redo, handleExport, undoDisabled, redoDisabled, hasConfig, isGo60, onOpenSettings, config, isZenMode, selectedComboKeys, layerNames, stopZenMode }) => {
+const KeyboardContainer = ({ keyboardGeo, activeLayerBindings, selectedKey, onSelectKey, scale, setScale, osMode, onContextAction, clipboard, styleClipboard, onSwapKeys, showLeds, undo, redo, handleExport, undoDisabled, redoDisabled, hasConfig, isGo60, onOpenSettings, onOpenCapabilities, config, isZenMode, selectedComboKeys, layerNames, stopZenMode }) => {
             const containerRef = useRef(null);
             const [autoFitScale, setAutoFitScale] = useState(1);
             const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -532,6 +877,7 @@ const KeyboardContainer = ({ keyboardGeo, activeLayerBindings, selectedKey, onSe
                             <button onClick={redo} disabled={redoDisabled} className={`p-2 rounded-xl flex items-center justify-center w-9 h-9 transition-all ${!redoDisabled ? 'text-app-text hover:bg-white/10 hover:-translate-y-px' : 'text-app-textMuted opacity-50 cursor-not-allowed'}`} title="Redo"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 10H11a5 5 0 00-5 5v1m15-6l-4-4m4 4l-4 4"></path></svg></button>
                             <div className="w-px h-6 bg-app-borderHighlight mx-2"></div>
                             <button onClick={onOpenSettings} className="p-2 rounded-xl flex items-center justify-center w-9 h-9 transition-all text-app-text hover:bg-white/10 hover:-translate-y-px" title="Settings"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg></button>
+                            {hasConfig && <button onClick={onOpenCapabilities} className="p-2 rounded-xl flex items-center justify-center w-9 h-9 transition-all text-app-text hover:bg-white/10 hover:-translate-y-px" title="Flows Automations"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg></button>}
                             <div className="w-px h-6 bg-app-borderHighlight mx-2"></div>
                             {hasConfig && <button onClick={handleExport} className="btn-active text-xs font-bold px-5 py-2 rounded-xl transition-all shadow-lg border-none hover:-translate-y-px">Export</button>}
                         </div>
@@ -577,6 +923,7 @@ const App = () => {
             const [layoutMode, setLayoutMode] = useState(() => localStorage.getItem('glide_layout') || 'bottom');
             const [osSetting, setOsSetting] = useState(() => localStorage.getItem('glide_os') || 'auto');
             const [showSettings, setShowSettings] = useState(false);
+            const [showCapabilities, setShowCapabilities] = useState(false);
             const effectiveOs = useMemo(() => osSetting === 'auto' ? detectOs() : osSetting, [osSetting]);
 
             useEffect(() => { document.documentElement.className = themeClass; localStorage.setItem('glide_theme', themeClass); }, [themeClass]);
@@ -614,6 +961,29 @@ const App = () => {
             const [showComboSettings, setShowComboSettings] = useState(false);
             const [comboSearchText, setComboSearchText] = useState('');
             const [comboLayerFilter, setComboLayerFilter] = useState(null); // null = all layers
+
+            // Flows Automations (see core/capabilities/*.js, called "Flows" internally after
+            // their github.com/moosylog/flows4json origin) — a browse-and-apply catalog that
+            // ships WITH GLIDE (core/capabilities/builtinCatalog.js), not fetched from a third
+            // party at runtime, so there's no loading/error state to manage: it's static data,
+            // parsed once.
+            const allFlowsCatalog = useMemo(() => parseCatalog(BUILTIN_FLOWS_CATALOG).entries, []);
+            // Only ever show automations that actually work on the loaded keyboard — a Go60
+            // owner never needs to see (or dig past) Glove80-only entries, and vice versa.
+            // Filtering here, once, rather than dimming incompatible cards in the modal, keeps
+            // categories and search results honest: a category with zero automations for this
+            // keyboard just doesn't appear.
+            const flowsCatalog = useMemo(() => allFlowsCatalog.filter((f) => isFlowCompatible(f, config)), [allFlowsCatalog, config]);
+            const [selectedFlowCategory, setSelectedFlowCategory] = useState(null); // app-store-style: category grid -> a category's list -> a flow's detail
+            const [selectedFlowUid, setSelectedFlowUid] = useState(null);
+            const [flowParamValues, setFlowParamValues] = useState({});
+            const [isApplyingFlow, setIsApplyingFlow] = useState(false);
+            const [flowSearchText, setFlowSearchText] = useState('');
+            // The most recent apply attempt PER automation (keyed by uid) — a small "result box"
+            // in that automation's own detail view, showing success/failure and (on success) the
+            // automation's own custom follow-up message, since a jq failure like "Cannot iterate
+            // over null (null)" is too cryptic to only flash in a 2.2s toast.
+            const [flowResults, setFlowResults] = useState({});
            
             // Zen Mode triggers solely by editing a combo, independent of right tab selection.
             const isZenMode = editingComboIdx !== null;
@@ -633,6 +1003,13 @@ const App = () => {
                         if (keyArray.includes(idx)) {
                             c.keyPositions = keyArray.filter(k => k !== idx);
                         } else {
+                            // ZMK caps a combo at MAX_COMBO_KEYS key positions
+                            // (CONFIG_ZMK_COMBOS_MAX_KEYS_PER_COMBO's default) — silently growing
+                            // past that would produce a combo the firmware can't actually build.
+                            if (keyArray.length >= MAX_COMBO_KEYS) {
+                                showToast(`A combo can use at most ${MAX_COMBO_KEYS} keys`);
+                                return;
+                            }
                             c.keyPositions = [...keyArray, idx];
                         }
                         c.key_positions = c.keyPositions;
@@ -754,14 +1131,23 @@ const App = () => {
             const showToast = useCallback((message, kind = 'default') => { setToast({ message, kind, id: Date.now() }); }, []);
             useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2200); return () => clearTimeout(t); }, [toast]);
 
-            const loadLayoutData = (parsed, sourceLabel) => {
-                let data = parsed?.keymap !== undefined ? parsed.keymap : parsed; if (!data || !Array.isArray(data.layers)) throw new Error('Missing a "layers" array');
+            // Applies an already-validated layout config to app state. Split from the actual
+            // parsing/validation (now core/io/loadLayout.js's parseLayoutJson/loadLayoutObject)
+            // so this part — which touches React state and only makes sense in the browser —
+            // stays separate from the pure logic that a future API-backed load path would reuse
+            // unchanged: only the byte source changes (file picker vs. fetch vs. an upload
+            // endpoint), never how a loaded layout is validated or applied.
+            const applyLoadedLayout = (data, sourceLabel) => {
                 setConfig(data); setActiveLayer(0); setSelectedKey(null); setEditingComboIdx(null); setLeftNavMode('Layers'); setUndoStack([]); setRedoStack([]); setCanvasScale(1.0); showToast(`Loaded ${sourceLabel}`);
             };
 
             const handleFileUpload = (e) => {
                 const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
-                reader.onload = (event) => { try { loadLayoutData(JSON.parse(event.target.result), `"${file.name}"`); } catch (err) { showToast(`Couldn't read file — ${err.message}`, 'error'); } };
+                reader.onload = (event) => {
+                    const { config: data, errors } = parseLayoutJson(event.target.result);
+                    if (errors.length > 0) { showToast(`Couldn't read "${file.name}" — ${errors[0]}`, 'error'); return; }
+                    applyLoadedLayout(data, `"${file.name}"`);
+                };
                 reader.readAsText(file); e.target.value = '';
             };
 
@@ -771,12 +1157,32 @@ const App = () => {
                     const response = await fetch(type === 'glove80' ? 'https://gist.githubusercontent.com/moosylog/a71d65a4b2de4215d7e226449f3cadb2/raw/ee1661e9adbe197285b50ef0bd8997f6a80e795c/Glove80_default.json' : 'https://gist.githubusercontent.com/moosylog/a71d65a4b2de4215d7e226449f3cadb2/raw/ee1661e9adbe197285b50ef0bd8997f6a80e795c/Go60_default.json');
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     let text = await response.text(); text = text.trim(); if (!text.startsWith('{') && !text.startsWith('[')) text = text.substring(text.indexOf('{'));
-                    loadLayoutData(JSON.parse(text), type === 'glove80' ? 'Glove80 template' : 'Go60 template');
+                    const { config: data, errors } = parseLayoutJson(text);
+                    if (errors.length > 0) throw new Error(errors[0]);
+                    applyLoadedLayout(data, type === 'glove80' ? 'Glove80 template' : 'Go60 template');
                 } catch (err) { showToast(`Couldn't fetch template — ${err.message}`, 'error'); } finally { setIsFetchingTemplate(false); }
             };
 
+            // Flows Automations run against the current config in-place — the automation stays
+            // open so the result box (success + custom follow-up text, or the error) is visible
+            // right where the automation was launched from, instead of bouncing back to a list.
+            const handleApplyFlow = async (flow) => {
+                if (!config) return;
+                setIsApplyingFlow(true);
+                const { config: nextConfig, errors, successMessage } = await applyFlow(config, flow, flowParamValues[flow.uid] || {});
+                setIsApplyingFlow(false);
+                if (errors.length > 0) {
+                    showToast(`"${flow.title}" failed — ${errors[0]}`, 'error');
+                    setFlowResults((prev) => ({ ...prev, [flow.uid]: { ok: false, message: errors[0] } }));
+                    return;
+                }
+                pushHistory(nextConfig);
+                showToast(`Applied "${flow.title}"`);
+                setFlowResults((prev) => ({ ...prev, [flow.uid]: { ok: true, message: successMessage } }));
+            };
+
             const handleExport = () => {
-                if (!config) return; const anchor = document.createElement('a'); anchor.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2)); anchor.download = `layout_${config.keyboard || 'custom'}.json`;
+                if (!config) return; const anchor = document.createElement('a'); anchor.href = "data:text/json;charset=utf-8," + encodeURIComponent(serializeLayout(config)); anchor.download = getExportFilename(config);
                 document.body.appendChild(anchor); anchor.click(); anchor.remove(); showToast('Layout exported');
             };
 
@@ -1037,67 +1443,16 @@ const App = () => {
                 const tdMatch = (config.tapDances || []).find(t => t.name === bindingName);
                 const mmMatch = (config.modMorphs || []).find(m => m.name === bindingName);
                 if (htMatch) {
-                    const ht = htMatch;
                     return (
                         <div className="bg-app-card p-4 rounded-b-xl border-x border-b border-app-borderHighlight -mt-2 pt-4 flex flex-col gap-4 shadow-inner relative z-0" onClick={e => e.stopPropagation()}>
-                            <div className="flex gap-4">
-                                <div className="flex flex-col flex-1 gap-1.5">
-                                    <label className="text-[10px] uppercase tracking-widest text-app-textMuted font-bold">Tapping Term</label>
-                                    <div className="flex bg-app-surface border border-app-borderHighlight rounded-lg overflow-hidden">
-                                        <input type="number" min="0" max="1000" step="10" className="w-full bg-transparent p-2 text-xs font-mono text-app-text outline-none" value={ht.tappingTermMs ?? 200} onChange={e => updateBehaviorSetting('holdTaps', bindingName, 'tappingTermMs', parseInt(e.target.value)||200)} />
-                                        <span className="p-2 text-xs text-app-textMuted font-mono">ms</span>
-                                    </div>
-                                </div>
-                                <div className="flex flex-col flex-1 gap-1.5">
-                                    <label className="text-[10px] uppercase tracking-widest text-app-textMuted font-bold">Quick Tap</label>
-                                    <div className="flex bg-app-surface border border-app-borderHighlight rounded-lg overflow-hidden">
-                                        <input type="number" min="-1" max="1000" step="10" className="w-full bg-transparent p-2 text-xs font-mono text-app-text outline-none" value={ht.quickTapMs ?? -1} onChange={e => updateBehaviorSetting('holdTaps', bindingName, 'quickTapMs', parseInt(e.target.value)||-1)} />
-                                        <span className="p-2 text-xs text-app-textMuted font-mono">ms</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-[10px] uppercase tracking-widest text-app-textMuted font-bold">Flavor Strategy</label>
-                                <select className="w-full bg-app-surface border border-app-borderHighlight p-2 rounded-lg text-xs text-app-text outline-none" value={ht.flavor || 'tap-preferred'} onChange={e => updateBehaviorSetting('holdTaps', bindingName, 'flavor', e.target.value)}>
-                                    <option value="tap-preferred">Tap Preferred</option><option value="hold-preferred">Hold Preferred</option><option value="balanced">Balanced</option><option value="tap-unless-interrupted">Tap Unless Interrupted</option>
-                                </select>
-                            </div>
-                            <div className="flex flex-col gap-1.5 mt-2">
-                                <label className="text-[10px] uppercase tracking-widest text-app-textMuted font-bold">Hold Trigger Keys</label>
-                                <p className="text-[10px] text-app-textMuted leading-tight mb-1">Click the keys below that should trigger the HOLD action when rolled over.</p>
-                                <MiniKeyboardMap geo={keyboardGeo} selectedKeys={ht.holdTriggerKeyPositions || []} onKeyToggle={(kIdx) => {
-                                    const nCfg = structuredClone(config);
-                                    const targetHt = nCfg.holdTaps.find(h => h.name === bindingName);
-                                    if (!targetHt.holdTriggerKeyPositions) targetHt.holdTriggerKeyPositions = [];
-                                    if (targetHt.holdTriggerKeyPositions.includes(kIdx)) targetHt.holdTriggerKeyPositions = targetHt.holdTriggerKeyPositions.filter(k => k !== kIdx);
-                                    else targetHt.holdTriggerKeyPositions.push(kIdx);
-                                    pushHistory(nCfg);
-                                }} />
-                            </div>
-                            <div className="flex justify-between mt-1">
-                                <label className="flex items-center gap-2 cursor-pointer group">
-                                    <input type="checkbox" checked={!!ht.retroTap} onChange={e => updateBehaviorSetting('holdTaps', bindingName, 'retroTap', e.target.checked)} className="accent-app-accent" />
-                                    <span className="text-xs text-app-textMuted group-hover:text-app-text transition-colors">Retro Tap</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer group">
-                                    <input type="checkbox" checked={!!ht.holdTriggerOnRelease} onChange={e => updateBehaviorSetting('holdTaps', bindingName, 'holdTriggerOnRelease', e.target.checked)} className="accent-app-accent" />
-                                    <span className="text-xs text-app-textMuted group-hover:text-app-text transition-colors">Trigger on Release</span>
-                                </label>
-                            </div>
+                            <DynamicBehaviorForm behaviorId="hold_tap" values={htMatch} keyboardGeo={keyboardGeo} onChange={(key, val) => updateBehaviorSetting('holdTaps', bindingName, key, val)} />
                             {renderDoneButton()}
                         </div>
                     );
                 } else if (tdMatch) {
-                    const td = tdMatch;
                     return (
                         <div className="bg-app-card p-4 rounded-b-xl border-x border-b border-app-borderHighlight -mt-2 pt-4 flex flex-col gap-4 shadow-inner relative z-0" onClick={e => e.stopPropagation()}>
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-[10px] uppercase tracking-widest text-app-textMuted font-bold">Tapping Term</label>
-                                <div className="flex bg-app-surface border border-app-borderHighlight rounded-lg overflow-hidden">
-                                    <input type="number" min="0" max="1000" step="10" className="w-full bg-transparent p-2 text-xs font-mono text-app-text outline-none" value={td.tappingTermMs ?? 200} onChange={e => updateBehaviorSetting('tapDances', bindingName, 'tappingTermMs', parseInt(e.target.value)||200)} />
-                                    <span className="p-2 text-xs text-app-textMuted font-mono">ms</span>
-                                </div>
-                            </div>
+                            <DynamicBehaviorForm behaviorId="tap_dance" values={tdMatch} keyboardGeo={keyboardGeo} onChange={(key, val) => updateBehaviorSetting('tapDances', bindingName, key, val)} />
                             {renderDoneButton()}
                         </div>
                     );
@@ -1375,16 +1730,23 @@ const App = () => {
                 } catch (err) { setJsonError(err.message); }
             };
 
+            // ZMK combos only ever fire one binding — there's no hold/tap distinction, no
+            // double-tap sequencing, and no shift-conditional output at the combo level (that's
+            // all per-key hold-tap/tap-dance/mod-morph behavior, which a combo's single `binding`
+            // can point AT, but a combo itself can't branch on hold vs. tap the way a key can).
+            // So while editing a combo, only the primary ("tap") slot is ever offered — never
+            // shiftTap/hold/doubleTap/label, regardless of what's in manuallyAddedSlots.
             const activeSlotKeys = ['tap'];
-            if (parsedSlots.shiftTap || manuallyAddedSlots.has('shiftTap')) activeSlotKeys.push('shiftTap');
-            if (parsedSlots.hold || manuallyAddedSlots.has('hold')) activeSlotKeys.push('hold');
-            if (parsedSlots.doubleTap || manuallyAddedSlots.has('doubleTap')) activeSlotKeys.push('doubleTap');
-           
             if (editingComboIdx === null) {
+                if (parsedSlots.shiftTap || manuallyAddedSlots.has('shiftTap')) activeSlotKeys.push('shiftTap');
+                if (parsedSlots.hold || manuallyAddedSlots.has('hold')) activeSlotKeys.push('hold');
+                if (parsedSlots.doubleTap || manuallyAddedSlots.has('doubleTap')) activeSlotKeys.push('doubleTap');
                 const hasCustomLabel = !!currentBinding?.decoration?.label;
                 if (hasCustomLabel || manuallyAddedSlots.has('label')) activeSlotKeys.push('label');
             }
-            const availableToAdd = ['shiftTap', 'hold', 'doubleTap', ...(editingComboIdx === null ? ['label'] : [])].filter(k => !activeSlotKeys.includes(k));
+            const availableToAdd = editingComboIdx === null
+                ? ['shiftTap', 'hold', 'doubleTap', 'label'].filter(k => !activeSlotKeys.includes(k))
+                : [];
 
             return (
                 <div className="flex h-screen w-screen font-sans text-sm overflow-hidden bg-app-base text-app-text transition-colors duration-300" onClick={() => setActiveConfigSlot(null)}>
@@ -1504,6 +1866,7 @@ const App = () => {
                                     })}
                                 </div>
                             )}
+
                         </div>
                     </aside>
 
@@ -1525,7 +1888,7 @@ const App = () => {
                                     </div>
                                 </div>
                             ) : (
-                                <KeyboardContainer keyboardGeo={keyboardGeo} activeLayerBindings={currentLayerBindings} selectedKey={selectedKey} onSelectKey={handleCanvasKeySelect} scale={canvasScale} setScale={setCanvasScale} osMode={effectiveOs} onContextAction={handleKeyContextAction} clipboard={clipboard} styleClipboard={styleClipboard} onSwapKeys={swapKeys} showLeds={showLeds} undo={undo} redo={redo} handleExport={handleExport} undoDisabled={undoStack.length===0} redoDisabled={redoStack.length===0} hasConfig={!!config} isGo60={isGo60} onOpenSettings={() => setShowSettings(true)} config={config} isZenMode={isZenMode} selectedComboKeys={editingComboIdx !== null ? (config.combos[editingComboIdx]?.keyPositions || config.combos[editingComboIdx]?.key_positions || []) : []} layerNames={layerNames} stopZenMode={() => setEditingComboIdx(null)} />
+                                <KeyboardContainer keyboardGeo={keyboardGeo} activeLayerBindings={currentLayerBindings} selectedKey={selectedKey} onSelectKey={handleCanvasKeySelect} scale={canvasScale} setScale={setCanvasScale} osMode={effectiveOs} onContextAction={handleKeyContextAction} clipboard={clipboard} styleClipboard={styleClipboard} onSwapKeys={swapKeys} showLeds={showLeds} undo={undo} redo={redo} handleExport={handleExport} undoDisabled={undoStack.length===0} redoDisabled={redoStack.length===0} hasConfig={!!config} isGo60={isGo60} onOpenSettings={() => setShowSettings(true)} onOpenCapabilities={() => setShowCapabilities(true)} config={config} isZenMode={isZenMode} selectedComboKeys={editingComboIdx !== null ? (config.combos[editingComboIdx]?.keyPositions || config.combos[editingComboIdx]?.key_positions || []) : []} layerNames={layerNames} stopZenMode={() => setEditingComboIdx(null)} />
                             )}
                         </section>
 
@@ -1878,6 +2241,24 @@ const App = () => {
                             </div>
                         </div>
                     )}
+
+                    <CapabilitiesModal
+                        isOpen={showCapabilities}
+                        onClose={() => { setShowCapabilities(false); setSelectedFlowUid(null); setSelectedFlowCategory(null); setFlowSearchText(''); }}
+                        config={config}
+                        catalog={flowsCatalog}
+                        selectedCategory={selectedFlowCategory}
+                        onSelectCategory={setSelectedFlowCategory}
+                        selectedUid={selectedFlowUid}
+                        onSelectUid={setSelectedFlowUid}
+                        paramValues={flowParamValues}
+                        onParamChange={(uid, id, val) => setFlowParamValues((prev) => ({ ...prev, [uid]: { ...prev[uid], [id]: val } }))}
+                        isApplying={isApplyingFlow}
+                        onApply={handleApplyFlow}
+                        searchText={flowSearchText}
+                        onSearchTextChange={setFlowSearchText}
+                        results={flowResults}
+                    />
 
                     {toast && (
                         <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-6 py-3.5 rounded-full text-xs font-bold shadow-2xl border transition-all animate-bounce ${toast.kind === 'error' ? 'bg-red-950 border-red-600 text-red-200' : 'bg-app-panel border-app-borderHighlight text-app-text'}`}>

@@ -1,0 +1,79 @@
+uid = "os_remap"
+type = "mutation"
+language = "us"
+title = "🍏 Remap to/from macOS"
+subtitle = "Swap modifier: macOS/Win"
+description = """
+Seamlessly switch your keyboard between macOS and Windows by making shortcuts behave the way you expect on both systems.
+
+Remaps all Ctrl and Cmd/GUI modifiers across your entire keyboard layout.
+This includes LCTRL ↔ LGUI, RCTRL ↔ RGUI, as well as LC() ↔ LG() and RC() ↔ RG() style bindings, including nested behaviors.
+Keeps familiar shortcuts like Copy, Paste, Undo, and Redo working naturally across both operating systems.
+Applies globally to all layers and custom key behaviors, so you can switch platforms without relearning muscle memory.
+"""
+script = """
+# 1. The Bi-directional Swap Map
+def get_replacements: {
+  "LCTRL": "LGUI",
+  "RCTRL": "RGUI",
+  "LGUI": "LCTRL",
+  "RGUI": "RCTRL",
+  "LC": "LG",
+  "RC": "RG",
+  "LG": "LC",
+  "RG": "RC"
+};
+
+# 2. The Universal Walker
+# This targets every object with a 'value' key anywhere in the file
+def for_every_binding(f):
+  (.. | objects | select(has("value"))) |= f;
+
+# PASS 1: The Specific LC(Y) Exception
+# Using a structural check to catch nested LC -> Y
+def pass_1_exception:
+  if .value == "LC" and (.params[0].value == "Y") then
+    .value = "LG"
+    | .params[0] = {
+        "value": "LS",
+        "params": [{ "value": "Z", "params": [] }]
+      }
+  else . end;
+
+# PASS 2: The Global Recursive Modifier Swap
+def pass_2_swap($r):
+
+  # Protect the result of Pass 1 from being swapped back
+  if .value == "LG"
+     and .params[0].value == "LS"
+     and .params[0].params[0].value == "Z"
+  then
+    .
+
+  else
+    .value |= (
+      if type == "string" then
+        if startswith("LC(") then sub("LC\\("; "LG(")
+        elif startswith("LG(") then sub("LG\\("; "LC(")
+        elif startswith("RC(") then sub("RC\\("; "RG(")
+        elif startswith("RG(") then sub("RG\\("; "RC(")
+        else ($r[.] // .)
+        end
+      else .
+      end
+    )
+  end;
+
+# --- EXECUTION ---
+get_replacements as $r |
+for_every_binding(pass_1_exception) |
+for_every_binding(pass_2_swap($r))
+"""
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "🍎"
+theme = "green"
+[config]
+category = "macOS"

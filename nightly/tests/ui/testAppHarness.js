@@ -8,10 +8,15 @@ import ReactDOM from 'react-dom/client';
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const CORE_SCRIPT_PATHS = [
-  'core/zmk/naming.js', 'core/zmk/layerPointers.js',
+  'core/zmk/naming.js', 'core/zmk/layerPointers.js', 'core/zmk/combos.js',
   'core/keycodes/zmkMap.js', 'core/keycodes/modChain.js',
   'core/geometry/convertGeo.js', 'core/geometry/glove80.js', 'core/geometry/go60.js',
   'core/gc.js', 'core/usage.js', 'core/slots.js', 'core/describe.js', 'core/layerShift.js',
+  'core/behaviors/schemas.js', 'core/behaviors/registry.js', 'core/behaviors/compile.js',
+  'core/io/layoutSchema.js', 'core/io/loadLayout.js', 'core/io/exportLayout.js',
+  'core/capabilities/paramBinding.js', 'core/capabilities/catalogSchema.js',
+  'core/capabilities/jqRunner.js', 'core/capabilities/applyFlow.js',
+  'core/capabilities/builtinCatalog.js',
 ];
 
 let compiledAppCache = null;
@@ -96,7 +101,7 @@ export async function loadFixtureFile(fixtureName) {
   const jsonText = readFileSync(path.join(repoRoot, 'tests', 'fixtures', fixtureName), 'utf8');
   const fileInput = q('input[type="file"]');
   const file = new window.File([jsonText], fixtureName, { type: 'application/json' });
-  Object.defineProperty(fileInput, 'files', { value: [file], writable: false });
+  Object.defineProperty(fileInput, 'files', { value: [file], writable: false, configurable: true });
   fileInput.dispatchEvent(new window.Event('change', { bubbles: true }));
   await delay(150);
 }
