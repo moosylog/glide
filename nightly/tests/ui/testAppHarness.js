@@ -8,7 +8,7 @@ import ReactDOM from 'react-dom/client';
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const CORE_SCRIPT_PATHS = [
-  'core/zmk/naming.js', 'core/zmk/layerPointers.js', 'core/zmk/combos.js', 'core/zmk/inputProcessors.js',
+  'core/zmk/naming.js', 'core/zmk/layerPointers.js', 'core/zmk/combos.js', 'core/zmk/inputProcessors.js', 'core/zmk/macro.js', 'core/zmk/stickyKey.js', 'core/zmk/modMorph.js', 'core/zmk/holdTap.js', 'core/zmk/tapDance.js',
   'core/keycodes/zmkMap.js', 'core/keycodes/modChain.js',
   'core/geometry/convertGeo.js', 'core/geometry/glove80.js', 'core/geometry/go60.js',
   'core/gc.js', 'core/usage.js', 'core/slots.js', 'core/describe.js', 'core/layerShift.js',
@@ -95,6 +95,30 @@ export async function typeInto(el, value) {
   nativeSetter.call(el, value);
   el.dispatchEvent(new window.Event('input', { bubbles: true }));
   await delay();
+}
+
+/**
+ * Dispatches a PointerEvent, for the touch/pen drag interactions (canvas panning, key
+ * drag-to-swap, long-press-for-context-menu, layer reordering, panel resizing) that are driven
+ * by Pointer Events rather than React's onClick — see glide.html's KeyboardContainer and the
+ * Layers list. `el` is where the event is dispatched from; pointermove/pointerup are usually
+ * dispatched on `document` since that's where the app's own listeners live once a drag starts.
+ */
+export async function pointerEvent(el, type, opts = {}) {
+  const { pointerId = 1, pointerType = 'touch', clientX = 0, clientY = 0, button = 0 } = opts;
+  el.dispatchEvent(new window.PointerEvent(type, { bubbles: true, cancelable: true, pointerId, pointerType, clientX, clientY, button }));
+  await delay();
+}
+
+/**
+ * jsdom has no real layout engine, so `document.elementFromPoint` is undefined — the app's drag
+ * logic calls it (optional-chained) to hit-test which key/layer-row a pointer is currently over.
+ * Tests that exercise a drag stub it to return a specific element for the duration of the test.
+ */
+export function stubElementFromPoint(elOrFn) {
+  const original = document.elementFromPoint;
+  document.elementFromPoint = typeof elOrFn === 'function' ? elOrFn : () => elOrFn;
+  return () => { document.elementFromPoint = original; };
 }
 
 export async function loadFixtureFile(fixtureName) {

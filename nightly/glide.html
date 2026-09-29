@@ -53,10 +53,15 @@
         *, *::before, *::after { box-sizing: border-box; }
         body { background-color: var(--bg-base); color: var(--text-main); overflow: hidden; margin: 0; transition: background-color 0.3s ease, color 0.3s ease; }
        
-        .canvas-container { background-color: var(--bg-base); background-image: radial-gradient(circle, var(--canvas-dot) 1px, transparent 1px); background-size: 32px 32px; cursor: grab; overflow: hidden; transition: background-color 0.3s ease; }
+        .canvas-container { background-color: var(--bg-base); background-image: radial-gradient(circle, var(--canvas-dot) 1px, transparent 1px); background-size: 32px 32px; cursor: grab; overflow: hidden; transition: background-color 0.3s ease; touch-action: none; }
         .canvas-container:active { cursor: grabbing; }
 
-        .p-key-outer { position: absolute; cursor: pointer; z-index: 1; user-select: none; transition: transform 0.15s ease; }
+        /* touch-action: none + no callout/selection — panning and key drag-to-swap are driven by
+           Pointer Events (see KeyboardContainer/KeyComponent in the app script) and need to own
+           the gesture completely: without this, iOS shows its press-and-hold text-selection
+           callout instead of firing our long-press-for-context-menu logic, and a touch drag can
+           get hijacked by the page's native scroll/zoom instead of panning or swapping keys. */
+        .p-key-outer { position: absolute; cursor: pointer; z-index: 1; user-select: none; -webkit-touch-callout: none; touch-action: none; transition: transform 0.15s ease; }
 
         .p-key-outer:hover { z-index: 20; }
         .p-key-outer.selected { z-index: 30; }
@@ -155,11 +160,16 @@
         <div class="glide-splash-spinner"></div>
         <div class="glide-splash-label">Loading…</div>
     </div>
-    <div id="root" class="h-screen w-screen flex overflow-hidden text-app-text bg-app-base transition-colors duration-300"></div>
+    <div id="root" class="h-dvh w-screen flex overflow-hidden text-app-text bg-app-base transition-colors duration-300"></div>
         <script src="core/zmk/naming.js"></script>
     <script src="core/zmk/layerPointers.js"></script>
     <script src="core/zmk/combos.js"></script>
     <script src="core/zmk/inputProcessors.js"></script>
+    <script src="core/zmk/macro.js"></script>
+    <script src="core/zmk/stickyKey.js"></script>
+    <script src="core/zmk/modMorph.js"></script>
+    <script src="core/zmk/holdTap.js"></script>
+    <script src="core/zmk/tapDance.js"></script>
     <script src="core/keycodes/zmkMap.js"></script>
     <script src="core/keycodes/modChain.js"></script>
     <script src="core/geometry/convertGeo.js"></script>
@@ -270,7 +280,49 @@ const { useState, useEffect, useMemo, useCallback, memo, useRef } = React;
             parseChain,
             CLICK_MAPPER_CODE_BY_TARGET,
             CLICK_TARGET_LABELS,
-            UNVERIFIED_CLICK_TARGETS
+            UNVERIFIED_CLICK_TARGETS,
+            parseMacro,
+            inferMacroParamCount,
+            findMacroReferences,
+            uniqueMacroName,
+            createMacro,
+            updateMacro,
+            renameMacro,
+            deleteMacro,
+            cloneMacro,
+            parseStickyKey,
+            findStickyKeyReferences,
+            uniqueStickyKeyName,
+            createStickyKey,
+            updateStickyKey,
+            renameStickyKey,
+            deleteStickyKey,
+            cloneStickyKey,
+            findModMorphReferences,
+            uniqueModMorphName,
+            normalizeModMorphCases,
+            createModMorph,
+            updateModMorph,
+            renameModMorph,
+            deleteModMorph,
+            cloneModMorph,
+            HOLD_TAP_FLAVORS,
+            normalizeHoldTapFields,
+            findHoldTapReferences,
+            uniqueHoldTapName,
+            createHoldTap,
+            updateHoldTap,
+            renameHoldTap,
+            deleteHoldTap,
+            cloneHoldTap,
+            normalizeTapDanceFields,
+            findTapDanceReferences,
+            uniqueTapDanceName,
+            createTapDance,
+            updateTapDance,
+            renameTapDance,
+            deleteTapDance,
+            cloneTapDance
         } = window.GlideCore;
 
 
@@ -878,6 +930,621 @@ const { useState, useEffect, useMemo, useCallback, memo, useRef } = React;
         }
         const ALL_PALETTE_SECTIONS = [...PALETTE_DATA.Basic, ...PALETTE_DATA.Media, ...PALETTE_DATA.SpecialKeys, ...PALETTE_DATA.Custom];
 
+        // -- Macro Builder --
+        // Reuses the same palette data/search the key-inspector uses for ordinary key
+        // assignment (PALETTE_DATA/searchAcrossAllPalette/ALL_PALETTE_SECTIONS) so a macro's
+        // behavior steps are picked from the exact same familiar grid, rather than a second,
+        // divergent list of keycodes.
+        function bindingFromPaletteItem(item) {
+            if (item.code) return { value: '&kp', params: [composeKeycodeParam(item.code, [])] };
+            if (item.type) {
+                const binding = { value: item.type };
+                if (item.param1 !== undefined) {
+                    binding.params = [{ value: item.param1, params: [] }];
+                    if (item.param2 !== undefined) binding.params.push({ value: item.param2, params: [] });
+                }
+                return binding;
+            }
+            return { value: '&none' };
+        }
+
+        function describeBindingParam(p) {
+            const inner = (p.params || []).map(describeBindingParam).join(' ');
+            return inner ? `${p.value}(${inner})` : String(p.value);
+        }
+        function describeBindingStep(binding) {
+            if (!binding || !binding.value) return '(empty)';
+            const name = binding.value.replace(/^&/, '');
+            const params = (binding.params || []).map(describeBindingParam).join(' ');
+            return params ? `${name} ${params}` : name;
+        }
+
+        const MACRO_MODE_LABELS = { tap: 'Tap', press: 'Press', release: 'Release' };
+
+        const MACRO_STEP_KIND_OPTIONS = [
+            { value: 'behavior', label: 'Key / Behavior' },
+            { value: 'mode:tap', label: 'Mode: Tap' },
+            { value: 'mode:press', label: 'Mode: Press' },
+            { value: 'mode:release', label: 'Mode: Release' },
+            { value: 'pauseForRelease', label: 'Pause For Release' },
+            { value: 'waitTime', label: 'Wait Time (ms)' },
+            { value: 'tapTime', label: 'Tap Time (ms)' },
+            { value: 'paramForward:1:1', label: 'Forward Param 1→1' },
+            { value: 'paramForward:1:2', label: 'Forward Param 1→2' },
+            { value: 'paramForward:2:1', label: 'Forward Param 2→1' },
+            { value: 'paramForward:2:2', label: 'Forward Param 2→2' },
+        ];
+
+        function defaultMacroStepForKind(kind) {
+            if (kind === 'behavior') return { kind: 'behavior', binding: { value: '&kp', params: [{ value: 'A', params: [] }] } };
+            if (kind.startsWith('mode:')) return { kind: 'mode', mode: kind.split(':')[1] };
+            if (kind === 'pauseForRelease') return { kind: 'pauseForRelease' };
+            if (kind === 'waitTime') return { kind: 'waitTime', ms: 0 };
+            if (kind === 'tapTime') return { kind: 'tapTime', ms: 0 };
+            if (kind.startsWith('paramForward:')) { const [, from, to] = kind.split(':'); return { kind: 'paramForward', from: Number(from), to: Number(to) }; }
+            return { kind: 'behavior', binding: { value: '&kp', params: [{ value: 'A', params: [] }] } };
+        }
+
+        const MacroBuilderModal = ({ name, config, layerNames, onClose, onSave }) => {
+            const macro = (config.macros || []).find((m) => m.name === name);
+            const [parsed, setParsed] = useState(() => parseMacro(macro));
+            const [nameField, setNameField] = useState(() => (macro?.name || '').replace(/^&/, ''));
+            const [stepPickerIdx, setStepPickerIdx] = useState(null);
+            const [stepSearch, setStepSearch] = useState('');
+
+            if (!macro) return null;
+
+            const updateSteps = (mutator) => setParsed((prev) => {
+                const next = structuredClone(prev);
+                mutator(next.steps);
+                return next;
+            });
+            const addStep = (step) => { updateSteps((steps) => { steps.push(step); }); if (step.kind === 'behavior') setStepPickerIdx(parsed.steps.length); };
+            const removeStep = (i) => { updateSteps((steps) => { steps.splice(i, 1); }); if (stepPickerIdx === i) setStepPickerIdx(null); };
+            const moveStep = (i, dir) => updateSteps((steps) => {
+                const j = i + dir;
+                if (j < 0 || j >= steps.length) return;
+                const tmp = steps[i]; steps[i] = steps[j]; steps[j] = tmp;
+            });
+            const updateStep = (i, patch) => updateSteps((steps) => { steps[i] = { ...steps[i], ...patch }; });
+
+            const handleApply = () => {
+                const trimmed = nameField.trim();
+                let finalName = macro.name;
+                if (trimmed && trimmed.replace(/^&/, '') !== macro.name.replace(/^&/, '')) {
+                    const configWithout = { ...config, macros: (config.macros || []).filter((m) => m.name !== macro.name) };
+                    finalName = uniqueMacroName(configWithout, trimmed);
+                }
+                onSave(macro.name, { ...parsed, name: finalName });
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={onClose}>
+                    <div data-testid="macro-modal" className="bg-app-surface border border-app-borderHighlight rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-app-borderHighlight shrink-0">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <svg className="w-5 h-5 text-app-accent shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                <span className="text-app-textMuted font-mono text-sm shrink-0">&amp;</span>
+                                <input value={nameField} onChange={(e) => setNameField(e.target.value)} className="flex-1 min-w-0 bg-transparent text-sm font-bold font-mono text-app-text outline-none border-b border-transparent focus:border-app-accent py-0.5" />
+                            </div>
+                            <button onClick={onClose} className="text-app-textMuted hover:text-app-text text-xl leading-none shrink-0 ml-3">&times;</button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-5">
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Description</label>
+                                <input type="text" value={parsed.description} onChange={(e) => setParsed((p) => ({ ...p, description: e.target.value }))} placeholder="What does this macro do?" className="w-full bg-app-card border border-app-borderHighlight rounded-lg px-3 py-2 text-xs text-app-text placeholder-app-textMuted outline-none focus:border-app-accent transition-colors" />
+                            </div>
+
+                            <div className="flex gap-4">
+                                <div className="flex-1 flex flex-col gap-1.5">
+                                    <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Tap Time (ms)</label>
+                                    <input type="number" min="0" placeholder="Device default" value={parsed.tapMs ?? ''} onChange={(e) => setParsed((p) => ({ ...p, tapMs: e.target.value === '' ? undefined : Math.max(0, Number(e.target.value) || 0) }))} className="w-full bg-app-card border border-app-borderHighlight rounded-lg px-3 py-2 text-xs font-mono text-app-text placeholder-app-textMuted outline-none focus:border-app-accent transition-colors" />
+                                </div>
+                                <div className="flex-1 flex flex-col gap-1.5">
+                                    <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Wait Time (ms)</label>
+                                    <input type="number" min="0" placeholder="Device default" value={parsed.waitMs ?? ''} onChange={(e) => setParsed((p) => ({ ...p, waitMs: e.target.value === '' ? undefined : Math.max(0, Number(e.target.value) || 0) }))} className="w-full bg-app-card border border-app-borderHighlight rounded-lg px-3 py-2 text-xs font-mono text-app-text placeholder-app-textMuted outline-none focus:border-app-accent transition-colors" />
+                                </div>
+                            </div>
+                            <p className="text-[11px] text-app-textMuted italic -mt-3">Leave blank to use the device's compiled-in default instead of an explicit value.</p>
+
+                            <div className="flex flex-col gap-2">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Steps</label>
+                                    <select value="" onChange={(e) => { if (e.target.value) addStep(defaultMacroStepForKind(e.target.value)); }} className="bg-app-card border border-dashed border-app-borderHighlight text-app-textMuted text-[11px] font-semibold rounded-lg px-2.5 py-1.5 outline-none cursor-pointer hover:text-app-text hover:border-app-textMuted transition-colors">
+                                        <option value="" disabled>+ Add Step…</option>
+                                        {MACRO_STEP_KIND_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                    </select>
+                                </div>
+
+                                {parsed.steps.length === 0 && <div className="text-app-textMuted text-xs italic text-center py-4">No steps yet — add one above.</div>}
+
+                                <div className="flex flex-col gap-2">
+                                    {parsed.steps.map((step, i) => (
+                                        <div key={i} className="flex items-start gap-2 p-2 rounded-lg border border-app-borderHighlight bg-app-card">
+                                            <div className="flex flex-col shrink-0">
+                                                <button onClick={() => moveStep(i, -1)} disabled={i === 0} className="w-5 h-5 flex items-center justify-center text-app-textMuted hover:text-app-text disabled:opacity-20 text-[10px]">▲</button>
+                                                <button onClick={() => moveStep(i, 1)} disabled={i === parsed.steps.length - 1} className="w-5 h-5 flex items-center justify-center text-app-textMuted hover:text-app-text disabled:opacity-20 text-[10px]">▼</button>
+                                            </div>
+                                            <span className="text-[9px] font-mono text-app-textMuted shrink-0 pt-2 w-4 text-right">{i + 1}</span>
+
+                                            {step.kind === 'behavior' && (
+                                                <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <code className="flex-1 min-w-0 truncate text-[11px] bg-app-surface border border-app-borderHighlight rounded px-2 py-1.5 text-app-text">{describeBindingStep(step.binding)}</code>
+                                                        <button onClick={() => { setStepPickerIdx(stepPickerIdx === i ? null : i); setStepSearch(''); }} className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg border border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-surface shrink-0">{stepPickerIdx === i ? 'Close' : 'Change'}</button>
+                                                    </div>
+                                                    {stepPickerIdx === i && (
+                                                        <div className="p-2 bg-app-surface border border-app-borderHighlight rounded-lg flex flex-col gap-2">
+                                                            <input autoFocus type="text" value={stepSearch} onChange={(e) => setStepSearch(e.target.value)} placeholder="Search keys & behaviors..." className="w-full bg-app-card border border-app-borderHighlight rounded px-2 py-1 text-[11px] text-app-text outline-none" />
+                                                            <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
+                                                                {!stepSearch.trim() && layerNames.map((n, li) => (
+                                                                    <button key={`mo-${li}`} onClick={() => { updateStep(i, { binding: { value: '&mo', params: [{ value: li, params: [] }] } }); setStepPickerIdx(null); }} className="px-2 py-1 text-[10px] font-bold rounded border border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-card">&amp;mo {n}</button>
+                                                                ))}
+                                                                {(stepSearch.trim() ? searchAcrossAllPalette(stepSearch) : ALL_PALETTE_SECTIONS).flatMap((section) => section.items).slice(0, 80).map((item, ii) => (
+                                                                    <button key={ii} onClick={() => { updateStep(i, { binding: bindingFromPaletteItem(item) }); setStepPickerIdx(null); }} className="px-2 py-1 text-[10px] font-bold rounded border border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-card">{item.label || item.code || item.type}</button>
+                                                                ))}
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 pt-1 border-t border-app-borderHighlight">
+                                                                <span className="text-[10px] text-app-textMuted shrink-0">Other:</span>
+                                                                <input type="text" placeholder="&behavior_name" defaultValue={step.binding.value} onBlur={(e) => { const v = e.target.value.trim(); if (v) updateStep(i, { binding: { value: v.startsWith('&') ? v : `&${v}` } }); }} className="flex-1 min-w-0 bg-app-card border border-app-borderHighlight rounded px-2 py-1 text-[11px] font-mono text-app-text outline-none" />
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {step.kind === 'mode' && (
+                                                <div className="flex gap-2 flex-1 pt-0.5">
+                                                    {['tap', 'press', 'release'].map((m) => (
+                                                        <button key={m} onClick={() => updateStep(i, { mode: m })} className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${step.mode === m ? 'bg-app-accent text-white border-app-accent shadow-sm' : 'border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-surface'}`}>{MACRO_MODE_LABELS[m]}</button>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {step.kind === 'pauseForRelease' && (
+                                                <span className="flex-1 text-[11px] text-app-textMuted italic py-1.5">Everything above runs on press; everything below runs on release.</span>
+                                            )}
+
+                                            {(step.kind === 'waitTime' || step.kind === 'tapTime') && (
+                                                <div className="flex items-center gap-2 flex-1 pt-0.5">
+                                                    <span className="text-xs font-bold text-app-textMuted shrink-0">{step.kind === 'waitTime' ? 'Wait' : 'Tap'}</span>
+                                                    <input type="number" min="0" value={step.ms} onChange={(e) => updateStep(i, { ms: Math.max(0, Number(e.target.value) || 0) })} className="w-20 bg-app-surface border border-app-borderHighlight rounded px-2 py-1 text-xs font-mono text-app-text outline-none" />
+                                                    <span className="text-xs text-app-textMuted">ms</span>
+                                                </div>
+                                            )}
+
+                                            {step.kind === 'paramForward' && (
+                                                <div className="flex items-center gap-2 flex-1 pt-0.5 text-xs font-bold text-app-textMuted">
+                                                    Forward param
+                                                    <select value={step.from} onChange={(e) => updateStep(i, { from: Number(e.target.value) })} className="bg-app-surface border border-app-borderHighlight rounded px-1.5 py-1 outline-none">
+                                                        <option value={1}>1</option><option value={2}>2</option>
+                                                    </select>
+                                                    →
+                                                    <select value={step.to} onChange={(e) => updateStep(i, { to: Number(e.target.value) })} className="bg-app-surface border border-app-borderHighlight rounded px-1.5 py-1 outline-none">
+                                                        <option value={1}>1</option><option value={2}>2</option>
+                                                    </select>
+                                                </div>
+                                            )}
+
+                                            <button onClick={() => removeStep(i)} className="w-6 h-6 flex items-center justify-center text-app-textMuted hover:text-red-400 hover:bg-red-900/30 rounded transition-colors shrink-0" title="Remove step">🗑️</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 px-6 py-4 border-t border-app-borderHighlight shrink-0">
+                            <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-xs font-bold border border-app-borderHighlight text-app-textMuted hover:text-app-text hover:bg-app-card transition-all">Cancel</button>
+                            <button onClick={handleApply} className="px-5 py-2.5 rounded-xl text-xs font-bold btn-active shadow-lg border-none hover:-translate-y-px transition-all">Apply</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // -- Sticky Key Builder --
+        // Much smaller surface than the Macro Builder above: a sticky key has no ordered step
+        // sequence, just four flat properties (ZMK: zmk.dev/docs/keymaps/behaviors/sticky-key).
+        const StickyKeyBuilderModal = ({ name, config, onClose, onSave }) => {
+            const stickyKey = (config.stickyKeys || []).find((s) => s.name === name);
+            const [parsed, setParsed] = useState(() => parseStickyKey(stickyKey));
+            const [nameField, setNameField] = useState(() => (stickyKey?.name || '').replace(/^&/, ''));
+
+            if (!stickyKey) return null;
+
+            const handleApply = () => {
+                const trimmed = nameField.trim();
+                let finalName = stickyKey.name;
+                if (trimmed && trimmed.replace(/^&/, '') !== stickyKey.name.replace(/^&/, '')) {
+                    const configWithout = { ...config, stickyKeys: (config.stickyKeys || []).filter((s) => s.name !== stickyKey.name) };
+                    finalName = uniqueStickyKeyName(configWithout, trimmed);
+                }
+                onSave(stickyKey.name, { ...parsed, name: finalName });
+            };
+
+            const Toggle = ({ label, hint, checked, onChange }) => (
+                <label className="flex items-center justify-between gap-3 cursor-pointer select-none py-1">
+                    <div>
+                        <span className="text-xs font-bold text-app-text">{label}</span>
+                        {hint && <p className="text-[11px] text-app-textMuted mt-0.5">{hint}</p>}
+                    </div>
+                    <span className="relative inline-block w-10 h-5 shrink-0">
+                        <input type="checkbox" checked={!!checked} onChange={(e) => onChange(e.target.checked)} className="peer sr-only" />
+                        <span className="absolute inset-0 rounded-full bg-app-card border border-app-borderHighlight peer-checked:bg-app-accent peer-checked:border-app-accent transition-colors"></span>
+                        <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5"></span>
+                    </span>
+                </label>
+            );
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={onClose}>
+                    <div data-testid="stickykey-modal" className="bg-app-surface border border-app-borderHighlight rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-app-borderHighlight shrink-0">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <span className="text-app-accent shrink-0">📌</span>
+                                <span className="text-app-textMuted font-mono text-sm shrink-0">&amp;</span>
+                                <input value={nameField} onChange={(e) => setNameField(e.target.value)} className="flex-1 min-w-0 bg-transparent text-sm font-bold font-mono text-app-text outline-none border-b border-transparent focus:border-app-accent py-0.5" />
+                            </div>
+                            <button onClick={onClose} className="text-app-textMuted hover:text-app-text text-xl leading-none shrink-0 ml-3">&times;</button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-5">
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Description</label>
+                                <input type="text" value={parsed.description} onChange={(e) => setParsed((p) => ({ ...p, description: e.target.value }))} placeholder="What does this sticky key do?" className="w-full bg-app-card border border-app-borderHighlight rounded-lg px-3 py-2 text-xs text-app-text placeholder-app-textMuted outline-none focus:border-app-accent transition-colors" />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Release After (ms)</label>
+                                <input type="number" min="0" placeholder="Device default (1000ms)" value={parsed.releaseAfterMs ?? ''} onChange={(e) => setParsed((p) => ({ ...p, releaseAfterMs: e.target.value === '' ? undefined : Math.max(0, Number(e.target.value) || 0) }))} className="w-full bg-app-card border border-app-borderHighlight rounded-lg px-3 py-2 text-xs font-mono text-app-text placeholder-app-textMuted outline-none focus:border-app-accent transition-colors" />
+                                <p className="text-[11px] text-app-textMuted italic">How long the key stays active waiting for another keypress. Leave blank to use the device's compiled-in default.</p>
+                            </div>
+
+                            <div className="flex flex-col divide-y divide-app-borderHighlight border-t border-b border-app-borderHighlight px-1">
+                                <Toggle label="Quick Release" hint="Deactivate on the next key press rather than its release — prevents accidentally capitalizing more than one letter." checked={parsed.quickRelease ?? false} onChange={(v) => setParsed((p) => ({ ...p, quickRelease: v }))} />
+                                <Toggle label="Lazy" hint="Delay activation until just before another key is pressed, rather than immediately — helps avoid unintended menu/hint triggers." checked={parsed.lazy ?? false} onChange={(v) => setParsed((p) => ({ ...p, lazy: v }))} />
+                                <Toggle label="Ignore Modifiers" hint="Let another sticky key stack onto this one before it releases, so multiple modifiers can combine (e.g. Ctrl+Shift) from separate taps." checked={parsed.ignoreModifiers ?? true} onChange={(v) => setParsed((p) => ({ ...p, ignoreModifiers: v }))} />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Wraps Behavior</label>
+                                <input type="text" value={(parsed.bindings || ['&kp'])[0]} onChange={(e) => { const v = e.target.value.trim(); setParsed((p) => ({ ...p, bindings: [v.startsWith('&') ? v : `&${v || 'kp'}`] })); }} className="w-full bg-app-card border border-app-borderHighlight rounded-lg px-3 py-2 text-xs font-mono text-app-text outline-none focus:border-app-accent transition-colors" />
+                                <p className="text-[11px] text-app-textMuted italic">Almost always <code>&amp;kp</code> — the behavior this sticky key applies to whatever it's assigned before. Only change this if you know you need something else.</p>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 px-6 py-4 border-t border-app-borderHighlight shrink-0">
+                            <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-xs font-bold border border-app-borderHighlight text-app-textMuted hover:text-app-text hover:bg-app-card transition-all">Cancel</button>
+                            <button onClick={handleApply} className="px-5 py-2.5 rounded-xl text-xs font-bold btn-active shadow-lg border-none hover:-translate-y-px transition-all">Apply</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // -- Mod-Morph Builder --
+        // A user-authored &mod_morph always has exactly two cases (see core/zmk/modMorph.js's
+        // header) — a default and a "when these mods are held" alternative — so this doesn't need
+        // an add/remove/reorder step list like the Macro Builder; it's two fixed binding pickers
+        // (reusing the same palette Change/search UI macro steps use) plus a mods/keepMods toggle
+        // grid for the second case.
+        const MOD_MORPH_FLAG_OPTIONS = ['MOD_LSFT', 'MOD_RSFT', 'MOD_LCTL', 'MOD_RCTL', 'MOD_LALT', 'MOD_RALT', 'MOD_LGUI', 'MOD_RGUI'];
+
+        const ModMorphBindingPicker = ({ label, binding, onChange, layerNames }) => {
+            const [open, setOpen] = useState(false);
+            const [search, setSearch] = useState('');
+            return (
+                <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">{label}</label>
+                    <div className="flex items-center gap-2">
+                        <code className="flex-1 min-w-0 truncate text-[11px] bg-app-card border border-app-borderHighlight rounded px-2 py-1.5 text-app-text">{describeBindingStep(binding)}</code>
+                        <button onClick={() => { setOpen(!open); setSearch(''); }} className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg border border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-card shrink-0">{open ? 'Close' : 'Change'}</button>
+                    </div>
+                    {open && (
+                        <div className="p-2 bg-app-card border border-app-borderHighlight rounded-lg flex flex-col gap-2">
+                            <input autoFocus type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search keys & behaviors..." className="w-full bg-app-surface border border-app-borderHighlight rounded px-2 py-1 text-[11px] text-app-text outline-none" />
+                            <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
+                                {!search.trim() && (layerNames || []).map((n, li) => (
+                                    <button key={`mo-${li}`} onClick={() => { onChange({ value: '&mo', params: [{ value: li, params: [] }] }); setOpen(false); }} className="px-2 py-1 text-[10px] font-bold rounded border border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-surface">&amp;mo {n}</button>
+                                ))}
+                                {(search.trim() ? searchAcrossAllPalette(search) : ALL_PALETTE_SECTIONS).flatMap((section) => section.items).slice(0, 80).map((item, ii) => (
+                                    <button key={ii} onClick={() => { onChange(bindingFromPaletteItem(item)); setOpen(false); }} className="px-2 py-1 text-[10px] font-bold rounded border border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-surface">{item.label || item.code || item.type}</button>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-1.5 pt-1 border-t border-app-borderHighlight">
+                                <span className="text-[10px] text-app-textMuted shrink-0">Other:</span>
+                                <input type="text" placeholder="&behavior_name" defaultValue={binding.value} onBlur={(e) => { const v = e.target.value.trim(); if (v) onChange({ value: v.startsWith('&') ? v : `&${v}` }); }} className="flex-1 min-w-0 bg-app-surface border border-app-borderHighlight rounded px-2 py-1 text-[11px] font-mono text-app-text outline-none" />
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const ModMorphBuilderModal = ({ name, config, layerNames, onClose, onSave }) => {
+            const modMorph = (config.modMorphs || []).find((m) => m.name === name);
+            const [parsed, setParsed] = useState(() => ({ description: modMorph?.description || '', cases: normalizeModMorphCases(modMorph?.cases) }));
+            const [nameField, setNameField] = useState(() => (modMorph?.name || '').replace(/^&/, ''));
+
+            if (!modMorph) return null;
+
+            const toggleMod = (mod) => setParsed((p) => {
+                const next = structuredClone(p);
+                const mods = next.cases[1].mods;
+                next.cases[1].mods = mods.includes(mod) ? mods.filter((m) => m !== mod) : [...mods, mod];
+                // keepMods can only ever keep a mod that's actually in mods — drop it from
+                // keepMods too the moment it's toggled off, rather than leaving a stale entry.
+                next.cases[1].keepMods = next.cases[1].keepMods.filter((m) => next.cases[1].mods.includes(m));
+                return next;
+            });
+            const toggleKeepMod = (mod) => setParsed((p) => {
+                const next = structuredClone(p);
+                const keepMods = next.cases[1].keepMods;
+                next.cases[1].keepMods = keepMods.includes(mod) ? keepMods.filter((m) => m !== mod) : [...keepMods, mod];
+                return next;
+            });
+
+            const handleApply = () => {
+                const trimmed = nameField.trim();
+                let finalName = modMorph.name;
+                if (trimmed && trimmed.replace(/^&/, '') !== modMorph.name.replace(/^&/, '')) {
+                    const configWithout = { ...config, modMorphs: (config.modMorphs || []).filter((m) => m.name !== modMorph.name) };
+                    finalName = uniqueModMorphName(configWithout, trimmed);
+                }
+                onSave(modMorph.name, { ...parsed, name: finalName });
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={onClose}>
+                    <div data-testid="modmorph-modal" className="bg-app-surface border border-app-borderHighlight rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-app-borderHighlight shrink-0">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <span className="text-app-accent shrink-0">⇄</span>
+                                <span className="text-app-textMuted font-mono text-sm shrink-0">&amp;</span>
+                                <input value={nameField} onChange={(e) => setNameField(e.target.value)} className="flex-1 min-w-0 bg-transparent text-sm font-bold font-mono text-app-text outline-none border-b border-transparent focus:border-app-accent py-0.5" />
+                            </div>
+                            <button onClick={onClose} className="text-app-textMuted hover:text-app-text text-xl leading-none shrink-0 ml-3">&times;</button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-5">
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Description</label>
+                                <input type="text" value={parsed.description} onChange={(e) => setParsed((p) => ({ ...p, description: e.target.value }))} placeholder="What does this mod-morph do?" className="w-full bg-app-card border border-app-borderHighlight rounded-lg px-3 py-2 text-xs text-app-text placeholder-app-textMuted outline-none focus:border-app-accent transition-colors" />
+                            </div>
+
+                            <ModMorphBindingPicker label="Default (no mods held)" binding={parsed.cases[0].binding} layerNames={layerNames} onChange={(b) => setParsed((p) => { const n = structuredClone(p); n.cases[0].binding = b; return n; })} />
+
+                            <div className="flex flex-col gap-2">
+                                <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Triggering Mods</label>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {MOD_MORPH_FLAG_OPTIONS.map((mod) => {
+                                        const active = parsed.cases[1].mods.includes(mod);
+                                        return <button key={mod} onClick={() => toggleMod(mod)} className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg border transition-colors ${active ? 'bg-app-accent text-white border-app-accent' : 'bg-app-card text-app-textMuted border-app-borderHighlight hover:text-app-text hover:border-app-textMuted'}`}>{mod.replace('MOD_', '')}</button>;
+                                    })}
+                                </div>
+                                <p className="text-[11px] text-app-textMuted italic">Fires when any one of the checked mods is held (not all of them at once).</p>
+                            </div>
+
+                            <ModMorphBindingPicker label="When triggering mods are held" binding={parsed.cases[1].binding} layerNames={layerNames} onChange={(b) => setParsed((p) => { const n = structuredClone(p); n.cases[1].binding = b; return n; })} />
+
+                            {parsed.cases[1].mods.length > 0 && (
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Keep Held</label>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {parsed.cases[1].mods.map((mod) => {
+                                            const active = parsed.cases[1].keepMods.includes(mod);
+                                            return <button key={mod} onClick={() => toggleKeepMod(mod)} className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg border transition-colors ${active ? 'bg-app-accent text-white border-app-accent' : 'bg-app-card text-app-textMuted border-app-borderHighlight hover:text-app-text hover:border-app-textMuted'}`}>{mod.replace('MOD_', '')}</button>;
+                                        })}
+                                    </div>
+                                    <p className="text-[11px] text-app-textMuted italic">Checked mods are still sent alongside the morphed key, instead of being consumed by triggering it — off by default.</p>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex justify-end gap-2 px-6 py-4 border-t border-app-borderHighlight shrink-0">
+                            <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-xs font-bold border border-app-borderHighlight text-app-textMuted hover:text-app-text hover:bg-app-card transition-all">Cancel</button>
+                            <button onClick={handleApply} className="px-5 py-2.5 rounded-xl text-xs font-bold btn-active shadow-lg border-none hover:-translate-y-px transition-all">Apply</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // -- Hold-Tap Builder --
+        // Unlike the Mod-Morph Builder's two full binding pickers, a hold-tap's `bindings` are
+        // plain behavior-NAME strings (see core/zmk/holdTap.js's header) — no params to pick, so a
+        // simple text field per slot is enough, matching the Sticky Key Builder's "Wraps Behavior"
+        // field rather than ModMorphBindingPicker's full palette search.
+        const HoldTapBuilderModal = ({ name, config, onClose, onSave }) => {
+            const holdTap = (config.holdTaps || []).find((h) => h.name === name);
+            const [parsed, setParsed] = useState(() => normalizeHoldTapFields(holdTap));
+            const [nameField, setNameField] = useState(() => (holdTap?.name || '').replace(/^&/, ''));
+
+            if (!holdTap) return null;
+
+            const handleApply = () => {
+                const trimmed = nameField.trim();
+                let finalName = holdTap.name;
+                if (trimmed && trimmed.replace(/^&/, '') !== holdTap.name.replace(/^&/, '')) {
+                    const configWithout = { ...config, holdTaps: (config.holdTaps || []).filter((h) => h.name !== holdTap.name) };
+                    finalName = uniqueHoldTapName(configWithout, trimmed);
+                }
+                onSave(holdTap.name, { ...parsed, name: finalName });
+            };
+
+            const Toggle = ({ label, hint, checked, onChange }) => (
+                <label className="flex items-center justify-between gap-3 cursor-pointer select-none py-1">
+                    <div>
+                        <span className="text-xs font-bold text-app-text">{label}</span>
+                        {hint && <p className="text-[11px] text-app-textMuted mt-0.5">{hint}</p>}
+                    </div>
+                    <span className="relative inline-block w-10 h-5 shrink-0">
+                        <input type="checkbox" checked={!!checked} onChange={(e) => onChange(e.target.checked)} className="peer sr-only" />
+                        <span className="absolute inset-0 rounded-full bg-app-card border border-app-borderHighlight peer-checked:bg-app-accent peer-checked:border-app-accent transition-colors"></span>
+                        <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5"></span>
+                    </span>
+                </label>
+            );
+
+            const NumberField = (label, key, hint, placeholder) => (
+                <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">{label}</label>
+                    <input type="number" placeholder={placeholder} value={parsed[key] ?? ''} onChange={(e) => setParsed((p) => ({ ...p, [key]: e.target.value === '' ? undefined : Number(e.target.value) || 0 }))} className="w-full bg-app-card border border-app-borderHighlight rounded-lg px-3 py-2 text-xs font-mono text-app-text placeholder-app-textMuted outline-none focus:border-app-accent transition-colors" />
+                    {hint && <p className="text-[11px] text-app-textMuted italic">{hint}</p>}
+                </div>
+            );
+
+            const BindingNameField = (label, idx) => (
+                <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">{label}</label>
+                    <div className="flex items-center gap-2">
+                        <span className="text-app-textMuted font-mono text-xs shrink-0">&amp;</span>
+                        <input type="text" value={(parsed.bindings[idx] || '').replace(/^&/, '')} onChange={(e) => { const v = e.target.value.trim(); setParsed((p) => { const bindings = [...p.bindings]; bindings[idx] = v ? `&${v}` : '&none'; return { ...p, bindings }; }); }} className="flex-1 min-w-0 bg-app-card border border-app-borderHighlight rounded-lg px-3 py-2 text-xs font-mono text-app-text outline-none focus:border-app-accent transition-colors" />
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={onClose}>
+                    <div data-testid="holdtap-modal" className="bg-app-surface border border-app-borderHighlight rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-app-borderHighlight shrink-0">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <span className="text-app-accent shrink-0">⏱️</span>
+                                <span className="text-app-textMuted font-mono text-sm shrink-0">&amp;</span>
+                                <input value={nameField} onChange={(e) => setNameField(e.target.value)} className="flex-1 min-w-0 bg-transparent text-sm font-bold font-mono text-app-text outline-none border-b border-transparent focus:border-app-accent py-0.5" />
+                            </div>
+                            <button onClick={onClose} className="text-app-textMuted hover:text-app-text text-xl leading-none shrink-0 ml-3">&times;</button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-5">
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Description</label>
+                                <input type="text" value={parsed.description} onChange={(e) => setParsed((p) => ({ ...p, description: e.target.value }))} placeholder="What does this hold-tap do?" className="w-full bg-app-card border border-app-borderHighlight rounded-lg px-3 py-2 text-xs text-app-text placeholder-app-textMuted outline-none focus:border-app-accent transition-colors" />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                {BindingNameField('Hold Behavior', 0)}
+                                {BindingNameField('Tap Behavior', 1)}
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Flavor</label>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {HOLD_TAP_FLAVORS.map((f) => (
+                                        <button key={f} onClick={() => setParsed((p) => ({ ...p, flavor: f }))} className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg border transition-colors ${parsed.flavor === f ? 'bg-app-accent text-white border-app-accent' : 'bg-app-card text-app-textMuted border-app-borderHighlight hover:text-app-text hover:border-app-textMuted'}`}>{f}</button>
+                                    ))}
+                                </div>
+                                <p className="text-[11px] text-app-textMuted italic">How the firmware decides hold vs. tap when another key is pressed mid-press. "tap-preferred" resolves as a tap unless the key is held past the tapping term; "hold-preferred" resolves as a hold the moment another key is pressed; "balanced" looks at whether the other key is released before this one.</p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                {NumberField('Tapping Term (ms)', 'tappingTermMs', "Device default if blank.", 'Device default')}
+                                {NumberField('Quick Tap (ms)', 'quickTapMs', 'A second press within this window always taps, even after a hold. -1 disables.', 'Device default')}
+                            </div>
+                            {NumberField('Require Prior Idle (ms)', 'requirePriorIdleMs', 'Forces a tap if this key is pressed within this window of the previous keypress.', 'Device default')}
+
+                            <div className="flex flex-col divide-y divide-app-borderHighlight border-t border-b border-app-borderHighlight px-1">
+                                <Toggle label="Hold Trigger On Release" hint="Only decide hold vs. tap once this key is released, rather than as soon as another key is pressed." checked={parsed.holdTriggerOnRelease ?? false} onChange={(v) => setParsed((p) => ({ ...p, holdTriggerOnRelease: v }))} />
+                                <Toggle label="Retro Tap" hint="If held past the tapping term with nothing else pressed, send a tap on release instead of nothing." checked={parsed.retroTap ?? false} onChange={(v) => setParsed((p) => ({ ...p, retroTap: v }))} />
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 px-6 py-4 border-t border-app-borderHighlight shrink-0">
+                            <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-xs font-bold border border-app-borderHighlight text-app-textMuted hover:text-app-text hover:bg-app-card transition-all">Cancel</button>
+                            <button onClick={handleApply} className="px-5 py-2.5 rounded-xl text-xs font-bold btn-active shadow-lg border-none hover:-translate-y-px transition-all">Apply</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // -- Tap-Dance Builder --
+        // A tap-dance's `bindings` ARE full binding objects (unlike a hold-tap's plain name
+        // strings — see core/zmk/tapDance.js's header), so this reuses ModMorphBindingPicker for
+        // each step, with add/remove around a 2-binding minimum (ZMK requires at least 2).
+        const TapDanceBuilderModal = ({ name, config, layerNames, onClose, onSave }) => {
+            const tapDance = (config.tapDances || []).find((t) => t.name === name);
+            const [parsed, setParsed] = useState(() => normalizeTapDanceFields(tapDance));
+            const [nameField, setNameField] = useState(() => (tapDance?.name || '').replace(/^&/, ''));
+
+            if (!tapDance) return null;
+
+            const handleApply = () => {
+                const trimmed = nameField.trim();
+                let finalName = tapDance.name;
+                if (trimmed && trimmed.replace(/^&/, '') !== tapDance.name.replace(/^&/, '')) {
+                    const configWithout = { ...config, tapDances: (config.tapDances || []).filter((t) => t.name !== tapDance.name) };
+                    finalName = uniqueTapDanceName(configWithout, trimmed);
+                }
+                onSave(tapDance.name, { ...parsed, name: finalName });
+            };
+
+            const setBindingAt = (idx, b) => setParsed((p) => { const bindings = [...p.bindings]; bindings[idx] = b; return { ...p, bindings }; });
+            const addBinding = () => setParsed((p) => ({ ...p, bindings: [...p.bindings, { value: '&none' }] }));
+            const removeBinding = (idx) => setParsed((p) => (p.bindings.length <= 2 ? p : { ...p, bindings: p.bindings.filter((_, i) => i !== idx) }));
+
+            const TAP_ORDINALS = ['1st Tap', '2nd Tap', '3rd Tap', '4th Tap', '5th Tap', '6th Tap'];
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={onClose}>
+                    <div data-testid="tapdance-modal" className="bg-app-surface border border-app-borderHighlight rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-app-borderHighlight shrink-0">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <span className="text-app-accent shrink-0">🔀</span>
+                                <span className="text-app-textMuted font-mono text-sm shrink-0">&amp;</span>
+                                <input value={nameField} onChange={(e) => setNameField(e.target.value)} className="flex-1 min-w-0 bg-transparent text-sm font-bold font-mono text-app-text outline-none border-b border-transparent focus:border-app-accent py-0.5" />
+                            </div>
+                            <button onClick={onClose} className="text-app-textMuted hover:text-app-text text-xl leading-none shrink-0 ml-3">&times;</button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-5">
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Description</label>
+                                <input type="text" value={parsed.description} onChange={(e) => setParsed((p) => ({ ...p, description: e.target.value }))} placeholder="What does this tap-dance do?" className="w-full bg-app-card border border-app-borderHighlight rounded-lg px-3 py-2 text-xs text-app-text placeholder-app-textMuted outline-none focus:border-app-accent transition-colors" />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Tapping Term (ms)</label>
+                                <input type="number" placeholder="Device default" value={parsed.tappingTermMs ?? ''} onChange={(e) => setParsed((p) => ({ ...p, tappingTermMs: e.target.value === '' ? undefined : Number(e.target.value) || 0 }))} className="w-full bg-app-card border border-app-borderHighlight rounded-lg px-3 py-2 text-xs font-mono text-app-text placeholder-app-textMuted outline-none focus:border-app-accent transition-colors" />
+                                <p className="text-[11px] text-app-textMuted italic">How long to wait for the next tap before firing the current count's binding.</p>
+                            </div>
+
+                            <div className="flex flex-col gap-3">
+                                <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Taps</label>
+                                {parsed.bindings.map((b, idx) => (
+                                    <div key={idx} className="flex items-start gap-2">
+                                        <div className="flex-1 min-w-0">
+                                            <ModMorphBindingPicker label={TAP_ORDINALS[idx] || `Tap ${idx + 1}`} binding={b} layerNames={layerNames} onChange={(nb) => setBindingAt(idx, nb)} />
+                                        </div>
+                                        {parsed.bindings.length > 2 && (
+                                            <button onClick={() => removeBinding(idx)} title="Remove this tap" className="mt-6 text-app-textMuted hover:text-red-400 text-lg leading-none shrink-0">&times;</button>
+                                        )}
+                                    </div>
+                                ))}
+                                <button onClick={addBinding} className="self-start px-3 py-1.5 text-[11px] font-bold rounded-lg border border-dashed border-app-borderHighlight text-app-textMuted hover:text-app-text hover:border-app-textMuted transition-colors">+ Add Tap</button>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 px-6 py-4 border-t border-app-borderHighlight shrink-0">
+                            <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-xs font-bold border border-app-borderHighlight text-app-textMuted hover:text-app-text hover:bg-app-card transition-all">Cancel</button>
+                            <button onClick={handleApply} className="px-5 py-2.5 rounded-xl text-xs font-bold btn-active shadow-lg border-none hover:-translate-y-px transition-all">Apply</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Sidebar nav modes that live under the collapsible "Behavior Library" section, rather
+        // than the always-visible Layers/Combos row. Used both to render that section's own tab
+        // row and to keep the section auto-expanded whenever one of its tabs is already active
+        // (so switching away and back, or a keyboard shortcut, never lands on a hidden panel).
+        // Named "Behavior Library" (not "Advanced Behaviors") specifically to avoid colliding
+        // with the pre-existing per-key inspector tab of that name (activeVerticalTab ===
+        // 'Advanced', below) — that one searches/assigns an EXISTING behavior to the selected
+        // key; this section is where the behavior DEFINITIONS themselves are created and edited.
+        const BEHAVIOR_LIBRARY_NAV_MODES = ['Macros', 'StickyKeys', 'ModMorphs', 'HoldTaps', 'TapDances'];
+
         const MOD_ARM_ORDER = ['LC', 'RC', 'LA', 'RA', 'LS', 'RS', 'LG', 'RG'];
         const MOD_BASES = [
             { base: 'C', mac: '⌃', win: 'Ctrl', linux: 'Ctrl', nameMac: 'Control', nameWin: 'Control', nameLinux: 'Control' },
@@ -1009,7 +1676,7 @@ const { useState, useEffect, useMemo, useCallback, memo, useRef } = React;
             if (hasCustomBg) { innerStyle.background = binding.decoration.background; innerStyle.borderColor = binding.decoration.background; innerStyle.color = getContrastColor(binding.decoration.background); }
 
             return (
-                <div className={`p-key-outer ${isSelected ? 'selected' : ''} ${isComboSelected ? 'combo-highlight' : ''} ${isDragOver ? 'drag-over' : ''} ${isTouchpad ? 'is-touchpad cursor-pointer' : ''}`} style={outerStyle} data-key-idx={index} title={isTouchpad ? `${TOUCHPAD_LABEL_BY_INDEX[index]} — click to configure` : undefined} onClick={(e) => { e.stopPropagation(); if (isTouchpad) onOpenTouchpad(index); else onSelect(index); }} onContextMenu={(e) => { if (isTouchpad) { e.preventDefault(); } else onContextMenu(e, index); }} onMouseDown={(e) => { if (!isTouchpad) onKeyMouseDown(e, index); }}>
+                <div className={`p-key-outer ${isSelected ? 'selected' : ''} ${isComboSelected ? 'combo-highlight' : ''} ${isDragOver ? 'drag-over' : ''} ${isTouchpad ? 'is-touchpad cursor-pointer' : ''}`} style={outerStyle} data-key-idx={index} title={isTouchpad ? `${TOUCHPAD_LABEL_BY_INDEX[index]} — click to configure` : undefined} onClick={(e) => { e.stopPropagation(); if (isTouchpad) onOpenTouchpad(index); else onSelect(index); }} onContextMenu={(e) => { if (isTouchpad) { e.preventDefault(); } else onContextMenu(e, index); }} onPointerDown={(e) => { if (!isTouchpad) onKeyMouseDown(e, index); }}>
                     <div className={`p-key ${hasCustomBg ? 'has-bg' : ''} ${isDragSource ? 'drag-source' : ''} ${isDragOver ? 'drag-over' : ''} ${geo.isRound ? 'is-round' : ''} ${isComboSelected ? 'combo-selected' : ''}`} style={innerStyle}>
                         {isTouchpad ? (
                             <div className="w-full h-full flex items-center justify-center text-app-textMuted/70 hover:text-app-accent transition-colors">
@@ -1050,16 +1717,47 @@ const KeyboardContainer = ({ keyboardGeo, activeLayerBindings, selectedKey, onSe
 
             const effectiveScale = autoFitScale * scale;
 
-            const handleMouseDown = (e) => { if(e.target.closest('.p-key')) return; setIsDragging(true); setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y }); };
-            const handleMouseMove = (e) => { if(!isDragging) return; setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y }); };
-            const handleMouseUp = () => setIsDragging(false);
+            // Pointer Events (not mouse-only) throughout this component: one code path handles
+            // mouse, touch and pen alike, which is what actually makes panning/drag-to-swap work
+            // on a phone or tablet — plain mousedown/mousemove/mouseup never fire for touch input.
+            const handlePointerDown = (e) => {
+                if (e.target.closest('.p-key')) return;
+                e.currentTarget.setPointerCapture?.(e.pointerId);
+                setIsDragging(true); setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+            };
+            const handlePointerMove = (e) => { if(!isDragging) return; setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y }); };
+            const handlePointerUp = (e) => { setIsDragging(false); try { e.currentTarget.releasePointerCapture?.(e.pointerId); } catch (_) {} };
 
+            // Long-press (touch/pen only — a mouse already has a real right-click) opens the same
+            // context menu right-click does. Threshold-based drag-to-swap and long-press share one
+            // pointerdown listener so they can cleanly cancel each other: moving past the drag
+            // threshold cancels a pending long-press, and a fired long-press cancels the drag.
+            const LONG_PRESS_MS = 500;
             const handleKeyMouseDown = (e, index) => {
-                if (isZenMode || e.button !== 0 || (isGo60 && (index === 60 || index === 61))) return;
-                const startX = e.clientX, startY = e.clientY; let dragging = false;
+                if (isZenMode || (e.pointerType === 'mouse' && e.button !== 0) || (isGo60 && (index === 60 || index === 61))) return;
+                const startX = e.clientX, startY = e.clientY, pointerId = e.pointerId;
+                let dragging = false, longPressFired = false;
+                const isTouchLike = e.pointerType !== 'mouse';
+
+                const cleanup = () => {
+                    if (longPressTimer) clearTimeout(longPressTimer);
+                    document.removeEventListener('pointermove', onMove);
+                    document.removeEventListener('pointerup', onUp);
+                    document.removeEventListener('pointercancel', onUp);
+                };
+                const longPressTimer = isTouchLike ? setTimeout(() => {
+                    longPressFired = true;
+                    cleanup();
+                    setDragSourceIdx(null); setDragOverIdx(null);
+                    openContextMenu({ clientX: startX, clientY: startY, preventDefault: () => {}, stopPropagation: () => {} }, index);
+                }, LONG_PRESS_MS) : null;
+
                 const onMove = (e2) => {
+                    if (e2.pointerId !== pointerId || longPressFired) return;
                     const dx = e2.clientX - startX, dy = e2.clientY - startY;
-                    if (!dragging && Math.hypot(dx, dy) > 6) { dragging = true; setDragSourceIdx(index); }
+                    const dist = Math.hypot(dx, dy);
+                    if (longPressTimer && dist > 10) clearTimeout(longPressTimer);
+                    if (!dragging && dist > 6) { dragging = true; setDragSourceIdx(index); }
                     if (dragging) {
                         const el = document.elementFromPoint(e2.clientX, e2.clientY)?.closest('[data-key-idx]');
                         const overIdx = el ? parseInt(el.dataset.keyIdx, 10) : null;
@@ -1067,7 +1765,9 @@ const KeyboardContainer = ({ keyboardGeo, activeLayerBindings, selectedKey, onSe
                     }
                 };
                 const onUp = (e2) => {
-                    document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp);
+                    if (e2.pointerId !== pointerId) return;
+                    cleanup();
+                    if (longPressFired) return; // already handled by the long-press timer above
                     if (dragging) {
                         const el = document.elementFromPoint(e2.clientX, e2.clientY)?.closest('[data-key-idx]');
                         const targetIdx = el ? parseInt(el.dataset.keyIdx, 10) : null;
@@ -1075,7 +1775,7 @@ const KeyboardContainer = ({ keyboardGeo, activeLayerBindings, selectedKey, onSe
                     }
                     setDragSourceIdx(null); setDragOverIdx(null);
                 };
-                document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+                document.addEventListener('pointermove', onMove); document.addEventListener('pointerup', onUp); document.addEventListener('pointercancel', onUp);
             };
            
             const openContextMenu = (e, index) => { e.preventDefault(); e.stopPropagation(); if (isZenMode || (isGo60 && (index === 60 || index === 61))) return; onSelectKey(index); setContextMenu({ x: e.clientX, y: e.clientY, keyIndex: index }); };
@@ -1085,7 +1785,7 @@ const KeyboardContainer = ({ keyboardGeo, activeLayerBindings, selectedKey, onSe
             const handlePasteDock = (e) => { e.stopPropagation(); if(selectedKey !== null) onContextAction('paste', selectedKey); };
 
             return (
-                <div ref={containerRef} className={`canvas-container absolute inset-0 flex items-center justify-center ${isZenMode ? 'bg-app-panel/50' : ''}`} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} onClick={() => { if(!isZenMode) onSelectKey(null); closeContextMenu(); }}>
+                <div ref={containerRef} className={`canvas-container absolute inset-0 flex items-center justify-center ${isZenMode ? 'bg-app-panel/50' : ''}`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onClick={() => { if(!isZenMode) onSelectKey(null); closeContextMenu(); }}>
                    
                     <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-3 z-30 pointer-events-auto backdrop-blur-xl bg-app-card/80 border border-app-borderHighlight px-4 py-2 rounded-2xl shadow-2xl transition-all">
                         {isZenMode ? (
@@ -1110,9 +1810,9 @@ const KeyboardContainer = ({ keyboardGeo, activeLayerBindings, selectedKey, onSe
                     </div>
 
                     <div className="absolute bottom-6 right-6 flex items-center gap-2 backdrop-blur-xl bg-app-card/70 border border-app-borderHighlight p-1.5 rounded-full shadow-2xl z-20">
-                        <button onClick={(e) => { e.stopPropagation(); setScale(s => Math.max(s - 0.1, 0.4)); }} className="text-app-textMuted hover:text-app-text p-1.5 hover:-translate-y-px transition-transform"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4"></path></svg></button>
+                        <button onClick={(e) => { e.stopPropagation(); setScale(s => Math.max(s - 0.1, 0.4)); }} className="text-app-textMuted hover:text-app-text p-2.5 hover:-translate-y-px transition-transform"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4"></path></svg></button>
                         <button onClick={(e) => { e.stopPropagation(); setScale(1); setPan({x:0,y:0}); }} className="text-[11px] font-mono font-bold w-12 text-center text-app-text hover:text-app-text transition-colors" title="Reset to auto-fit">{Math.round(effectiveScale * 100)}%</button>
-                        <button onClick={(e) => { e.stopPropagation(); setScale(s => Math.min(s + 0.1, 2)); }} className="text-app-textMuted hover:text-app-text p-1.5 hover:-translate-y-px transition-transform"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg></button>
+                        <button onClick={(e) => { e.stopPropagation(); setScale(s => Math.min(s + 0.1, 2)); }} className="text-app-textMuted hover:text-app-text p-2.5 hover:-translate-y-px transition-transform"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg></button>
                     </div>
                    
                     <div className="relative origin-center" style={{ width: `${bounds.w}px`, height: `${bounds.h}px`, transform: `translate(${pan.x}px, ${pan.y}px) scale(${effectiveScale})` }}>
@@ -1246,12 +1946,28 @@ const App = () => {
             const leftResizeStateRef = useRef(null);
             useEffect(() => { localStorage.setItem('glide_left_layout', leftPanelSize); }, [leftPanelSize]);
 
-            const [leftNavMode, setLeftNavMode] = useState('Layers'); // Layers or Combos
+            const [leftNavMode, setLeftNavMode] = useState('Layers'); // Layers, Combos, Macros, StickyKeys, or ModMorphs
             const [selectedComboKeys, setSelectedComboKeys] = useState([]);
             const [editingComboIdx, setEditingComboIdx] = useState(null);
             const [showComboSettings, setShowComboSettings] = useState(false);
             const [comboSearchText, setComboSearchText] = useState('');
             const [comboLayerFilter, setComboLayerFilter] = useState(null); // null = all layers
+            const [macroSearchText, setMacroSearchText] = useState('');
+            const [macroModalName, setMacroModalName] = useState(null); // name of the macro open in MacroBuilderModal, or null
+            const [stickyKeySearchText, setStickyKeySearchText] = useState('');
+            const [stickyKeyModalName, setStickyKeyModalName] = useState(null); // name of the sticky key open in StickyKeyBuilderModal, or null
+            const [modMorphSearchText, setModMorphSearchText] = useState('');
+            const [modMorphModalName, setModMorphModalName] = useState(null); // name of the mod-morph open in ModMorphBuilderModal, or null
+            const [holdTapSearchText, setHoldTapSearchText] = useState('');
+            const [holdTapModalName, setHoldTapModalName] = useState(null); // name of the hold-tap open in HoldTapBuilderModal, or null
+            const [tapDanceSearchText, setTapDanceSearchText] = useState('');
+            const [tapDanceModalName, setTapDanceModalName] = useState(null); // name of the tap-dance open in TapDanceBuilderModal, or null
+            // Macros/Sticky/Morphs/Hold-Taps/Tap-Dances are power-user behavior editors, tucked
+            // under a collapsible "Behavior Library" section (collapsed by default) so the
+            // everyday Layers/Combos workflow isn't cluttered with five extra tabs most people
+            // will never open. Deliberately not called "Advanced Behaviors" — see
+            // BEHAVIOR_LIBRARY_NAV_MODES's comment for why.
+            const [behaviorLibraryExpanded, setBehaviorLibraryExpanded] = useState(false);
 
             // Flows Automations (see core/capabilities/*.js, called "Flows" internally after
             // their github.com/moosylog/flows4json origin) — a browse-and-apply catalog that
@@ -1339,26 +2055,32 @@ const App = () => {
             const [renamingLayerIdx, setRenamingLayerIdx] = useState(null);
             const [renameValue, setRenameValue] = useState('');
 
+            // Pointer Events here too (not just mouse) — a tablet/touch user needs to be able to
+            // drag these resize handles the same as a mouse user.
             const handleRightResizeStart = (e) => {
                 e.preventDefault(); const isRight = layoutMode === 'right'; rightResizeStateRef.current = { start: isRight ? e.clientX : e.clientY, startSize: panelSize };
+                const pointerId = e.pointerId;
                 const onMove = (e2) => {
+                    if (e2.pointerId !== pointerId) return;
                     const delta = isRight ? (rightResizeStateRef.current.start - e2.clientX) : (rightResizeStateRef.current.start - e2.clientY);
                     const maxAllowed = isRight ? window.innerWidth * 0.6 : window.innerHeight * 0.8; const minAllowed = isRight ? 340 : 220;
                     setPanelSize(Math.max(minAllowed, Math.min(rightResizeStateRef.current.startSize + delta, maxAllowed)));
                 };
-                const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
-                document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+                const onUp = (e2) => { if (e2.pointerId !== pointerId) return; document.removeEventListener('pointermove', onMove); document.removeEventListener('pointerup', onUp); document.removeEventListener('pointercancel', onUp); };
+                document.addEventListener('pointermove', onMove); document.addEventListener('pointerup', onUp); document.addEventListener('pointercancel', onUp);
             };
 
             const handleLeftResizeStart = (e) => {
                 e.preventDefault(); leftResizeStateRef.current = { start: e.clientX, startSize: leftPanelSize };
                 const sign = sidebarSide === 'right' ? -1 : 1;
+                const pointerId = e.pointerId;
                 const onMove = (e2) => {
+                    if (e2.pointerId !== pointerId) return;
                     const delta = (e2.clientX - leftResizeStateRef.current.start) * sign;
                     setLeftPanelSize(Math.max(200, Math.min(leftResizeStateRef.current.startSize + delta, window.innerWidth * 0.4)));
                 };
-                const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
-                document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+                const onUp = (e2) => { if (e2.pointerId !== pointerId) return; document.removeEventListener('pointermove', onMove); document.removeEventListener('pointerup', onUp); document.removeEventListener('pointercancel', onUp); };
+                document.addEventListener('pointermove', onMove); document.addEventListener('pointerup', onUp); document.addEventListener('pointercancel', onUp);
             };
 
             const [jsonStr, setJsonStr] = useState(""); const [jsonError, setJsonError] = useState("");
@@ -1389,6 +2111,71 @@ const App = () => {
                         return nameMatch || keyMatch;
                     });
             }, [config, comboSearchText, comboLayerFilter]);
+
+            const filteredMacros = useMemo(() => {
+                if (!config) return [];
+                const search = macroSearchText.trim().toLowerCase();
+                return (config.macros || [])
+                    .map((macro, idx) => ({ macro, idx }))
+                    .filter(({ macro }) => {
+                        if (!search) return true;
+                        const nameMatch = (macro.name || '').toLowerCase().includes(search);
+                        const descMatch = (macro.description || '').toLowerCase().includes(search);
+                        return nameMatch || descMatch;
+                    });
+            }, [config, macroSearchText]);
+
+            const filteredStickyKeys = useMemo(() => {
+                if (!config) return [];
+                const search = stickyKeySearchText.trim().toLowerCase();
+                return (config.stickyKeys || [])
+                    .map((stickyKey, idx) => ({ stickyKey, idx }))
+                    .filter(({ stickyKey }) => {
+                        if (!search) return true;
+                        const nameMatch = (stickyKey.name || '').toLowerCase().includes(search);
+                        const descMatch = (stickyKey.description || '').toLowerCase().includes(search);
+                        return nameMatch || descMatch;
+                    });
+            }, [config, stickyKeySearchText]);
+
+            const filteredModMorphs = useMemo(() => {
+                if (!config) return [];
+                const search = modMorphSearchText.trim().toLowerCase();
+                return (config.modMorphs || [])
+                    .map((modMorph, idx) => ({ modMorph, idx }))
+                    .filter(({ modMorph }) => {
+                        if (!search) return true;
+                        const nameMatch = (modMorph.name || '').toLowerCase().includes(search);
+                        const descMatch = (modMorph.description || '').toLowerCase().includes(search);
+                        return nameMatch || descMatch;
+                    });
+            }, [config, modMorphSearchText]);
+
+            const filteredHoldTaps = useMemo(() => {
+                if (!config) return [];
+                const search = holdTapSearchText.trim().toLowerCase();
+                return (config.holdTaps || [])
+                    .map((holdTap, idx) => ({ holdTap, idx }))
+                    .filter(({ holdTap }) => {
+                        if (!search) return true;
+                        const nameMatch = (holdTap.name || '').toLowerCase().includes(search);
+                        const descMatch = (holdTap.description || '').toLowerCase().includes(search);
+                        return nameMatch || descMatch;
+                    });
+            }, [config, holdTapSearchText]);
+
+            const filteredTapDances = useMemo(() => {
+                if (!config) return [];
+                const search = tapDanceSearchText.trim().toLowerCase();
+                return (config.tapDances || [])
+                    .map((tapDance, idx) => ({ tapDance, idx }))
+                    .filter(({ tapDance }) => {
+                        if (!search) return true;
+                        const nameMatch = (tapDance.name || '').toLowerCase().includes(search);
+                        const descMatch = (tapDance.description || '').toLowerCase().includes(search);
+                        return nameMatch || descMatch;
+                    });
+            }, [config, tapDanceSearchText]);
 
             useEffect(() => { if (config && activeLayer >= config.layers.length) setActiveLayer(Math.max(0, config.layers.length - 1)); }, [config]);
             const currentLayerBindings = useMemo(() => config?.layers?.[activeLayer] || [], [config, activeLayer]);
@@ -1498,8 +2285,30 @@ const App = () => {
             };
 
             const handleExport = () => {
-                if (!config) return; const anchor = document.createElement('a'); anchor.href = "data:text/json;charset=utf-8," + encodeURIComponent(serializeLayout(config)); anchor.download = getExportFilename(config);
-                document.body.appendChild(anchor); anchor.click(); anchor.remove(); setIsDirty(false); showToast('Layout exported');
+                // A Blob object URL, not a `data:` URI — mobile Safari (and some Android
+                // WebViews) frequently ignore `download` on a `data:` href and just navigate to
+                // it/open a viewer instead of saving the file. A same-origin blob: URL is the
+                // combination browsers actually honor the `download` attribute for.
+                if (!config) return;
+                const text = serializeLayout(config); const filename = getExportFilename(config);
+                const anchor = document.createElement('a');
+                try {
+                    // A Blob object URL, not just a `data:` URI — mobile Safari (and some Android
+                    // WebViews) frequently ignore `download` on a `data:` href and just navigate
+                    // to it/open a viewer instead of saving the file. A same-origin blob: URL is
+                    // the combination browsers actually honor `download` for.
+                    const blob = new window.Blob([text], { type: 'application/json' });
+                    const url = window.URL.createObjectURL(blob);
+                    anchor.href = url; anchor.download = filename;
+                    document.body.appendChild(anchor); anchor.click(); anchor.remove();
+                    setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+                } catch (err) {
+                    // Fall back to the old data-URI approach if Blob/createObjectURL isn't
+                    // available for some reason — still better than a hard failure.
+                    anchor.href = "data:text/json;charset=utf-8," + encodeURIComponent(text); anchor.download = filename;
+                    document.body.appendChild(anchor); anchor.click(); anchor.remove();
+                }
+                setIsDirty(false); showToast('Layout exported');
             };
 
             const assignAction = (item) => {
@@ -2009,6 +2818,40 @@ const App = () => {
                 else if (fromIdx > activeLayer && toIdx <= activeLayer) setActiveLayer(activeLayer + 1);
             };
 
+            // Pointer-based layer reordering — deliberately not the native HTML5 Drag and Drop
+            // API (draggable/onDragStart/onDragOver/onDrop): that API has no real touch backing
+            // (iOS Safari doesn't fire drag events for a finger at all), so reordering layers
+            // would have been mouse-only. This mirrors the same elementFromPoint-based approach
+            // used for the canvas's key-swap drag, driven from the row's grab handle only so it
+            // doesn't fight with tapping the layer name or its clone/rename/delete buttons.
+            const handleLayerPointerDown = (e, i) => {
+                e.preventDefault();
+                const pointerId = e.pointerId;
+                setDraggedLayerIdx(i);
+                const onMove = (e2) => {
+                    if (e2.pointerId !== pointerId) return;
+                    const el = document.elementFromPoint(e2.clientX, e2.clientY)?.closest('[data-layer-idx]');
+                    const overIdx = el ? parseInt(el.dataset.layerIdx, 10) : null;
+                    setDragOverLayerIdx(overIdx !== null && overIdx !== i ? overIdx : null);
+                };
+                const finish = (e2) => {
+                    document.removeEventListener('pointermove', onMove);
+                    document.removeEventListener('pointerup', onUp);
+                    document.removeEventListener('pointercancel', onCancel);
+                    if (e2) {
+                        const el = document.elementFromPoint(e2.clientX, e2.clientY)?.closest('[data-layer-idx]');
+                        const targetIdx = el ? parseInt(el.dataset.layerIdx, 10) : null;
+                        if (targetIdx !== null && targetIdx !== i) moveLayerReorder(i, targetIdx);
+                    }
+                    setDraggedLayerIdx(null); setDragOverLayerIdx(null);
+                };
+                const onUp = (e2) => { if (e2.pointerId !== pointerId) return; finish(e2); };
+                const onCancel = (e2) => { if (e2.pointerId !== pointerId) return; finish(null); };
+                document.addEventListener('pointermove', onMove);
+                document.addEventListener('pointerup', onUp);
+                document.addEventListener('pointercancel', onCancel);
+            };
+
             const cloneLayer = (idx) => {
                 if (!config) return;
                 const newConfig = structuredClone(config);
@@ -2033,6 +2876,166 @@ const App = () => {
                 pushHistory(newConfig);
                 setEditingComboIdx(newConfig.combos.length - 1);
                 setActiveVerticalTab('Keymap');
+            };
+
+            const createNewMacro = () => {
+                const { config: newConfig, name } = createMacro(config, 'my_macro');
+                pushHistory(newConfig);
+                setMacroModalName(name);
+            };
+            const cloneMacroAction = (name) => {
+                const { config: newConfig, name: newName } = cloneMacro(config, name);
+                if (!newName) return;
+                pushHistory(newConfig);
+                showToast('Macro cloned');
+            };
+            const deleteMacroAction = async (name) => {
+                const refs = findMacroReferences(config, name);
+                if (refs.length > 0) {
+                    const msg = `"${name.replace('&', '')}" is still used by ${refs.length === 1 ? refs[0] : `${refs.length} other things`} — deleting it will leave those pointing at a macro that no longer exists.`;
+                    if ((await askConfirm({ title: 'Macro still in use', message: msg, confirmLabel: 'Delete Anyway', danger: true })) !== 'confirm') return;
+                }
+                pushHistory(deleteMacro(config, name));
+                if (macroModalName === name) setMacroModalName(null);
+                showToast('Macro deleted');
+            };
+
+            const saveMacroFromModal = (oldName, updatedParsed) => {
+                let next = config;
+                const newName = updatedParsed.name;
+                if (newName !== oldName) next = renameMacro(next, oldName, newName);
+                next = updateMacro(next, newName, updatedParsed);
+                pushHistory(next);
+                setMacroModalName(null);
+                showToast('Macro saved');
+            };
+
+            const createNewStickyKey = () => {
+                const { config: newConfig, name } = createStickyKey(config, 'my_sticky_key');
+                pushHistory(newConfig);
+                setStickyKeyModalName(name);
+            };
+            const cloneStickyKeyAction = (name) => {
+                const { config: newConfig, name: newName } = cloneStickyKey(config, name);
+                if (!newName) return;
+                pushHistory(newConfig);
+                showToast('Sticky key cloned');
+            };
+            const deleteStickyKeyAction = async (name) => {
+                const refs = findStickyKeyReferences(config, name);
+                if (refs.length > 0) {
+                    const msg = `"${name.replace('&', '')}" is still used by ${refs.length === 1 ? refs[0] : `${refs.length} other things`} — deleting it will leave those pointing at a sticky key that no longer exists.`;
+                    if ((await askConfirm({ title: 'Sticky key still in use', message: msg, confirmLabel: 'Delete Anyway', danger: true })) !== 'confirm') return;
+                }
+                pushHistory(deleteStickyKey(config, name));
+                if (stickyKeyModalName === name) setStickyKeyModalName(null);
+                showToast('Sticky key deleted');
+            };
+
+            const saveStickyKeyFromModal = (oldName, updatedParsed) => {
+                let next = config;
+                const newName = updatedParsed.name;
+                if (newName !== oldName) next = renameStickyKey(next, oldName, newName);
+                next = updateStickyKey(next, newName, updatedParsed);
+                pushHistory(next);
+                setStickyKeyModalName(null);
+                showToast('Sticky key saved');
+            };
+
+            const createNewModMorph = () => {
+                const { config: newConfig, name } = createModMorph(config, 'my_mod_morph');
+                pushHistory(newConfig);
+                setModMorphModalName(name);
+            };
+            const cloneModMorphAction = (name) => {
+                const { config: newConfig, name: newName } = cloneModMorph(config, name);
+                if (!newName) return;
+                pushHistory(newConfig);
+                showToast('Mod-morph cloned');
+            };
+            const deleteModMorphAction = async (name) => {
+                const refs = findModMorphReferences(config, name);
+                if (refs.length > 0) {
+                    const msg = `"${name.replace('&', '')}" is still used by ${refs.length === 1 ? refs[0] : `${refs.length} other things`} — deleting it will leave those pointing at a mod-morph that no longer exists.`;
+                    if ((await askConfirm({ title: 'Mod-morph still in use', message: msg, confirmLabel: 'Delete Anyway', danger: true })) !== 'confirm') return;
+                }
+                pushHistory(deleteModMorph(config, name));
+                if (modMorphModalName === name) setModMorphModalName(null);
+                showToast('Mod-morph deleted');
+            };
+
+            const saveModMorphFromModal = (oldName, updatedParsed) => {
+                let next = config;
+                const newName = updatedParsed.name;
+                if (newName !== oldName) next = renameModMorph(next, oldName, newName);
+                next = updateModMorph(next, newName, updatedParsed);
+                pushHistory(next);
+                setModMorphModalName(null);
+                showToast('Mod-morph saved');
+            };
+
+            const createNewHoldTap = () => {
+                const { config: newConfig, name } = createHoldTap(config, 'my_hold_tap');
+                pushHistory(newConfig);
+                setHoldTapModalName(name);
+            };
+            const cloneHoldTapAction = (name) => {
+                const { config: newConfig, name: newName } = cloneHoldTap(config, name);
+                if (!newName) return;
+                pushHistory(newConfig);
+                showToast('Hold-tap cloned');
+            };
+            const deleteHoldTapAction = async (name) => {
+                const refs = findHoldTapReferences(config, name);
+                if (refs.length > 0) {
+                    const msg = `"${name.replace('&', '')}" is still used by ${refs.length === 1 ? refs[0] : `${refs.length} other things`} — deleting it will leave those pointing at a hold-tap that no longer exists.`;
+                    if ((await askConfirm({ title: 'Hold-tap still in use', message: msg, confirmLabel: 'Delete Anyway', danger: true })) !== 'confirm') return;
+                }
+                pushHistory(deleteHoldTap(config, name));
+                if (holdTapModalName === name) setHoldTapModalName(null);
+                showToast('Hold-tap deleted');
+            };
+
+            const saveHoldTapFromModal = (oldName, updatedParsed) => {
+                let next = config;
+                const newName = updatedParsed.name;
+                if (newName !== oldName) next = renameHoldTap(next, oldName, newName);
+                next = updateHoldTap(next, newName, updatedParsed);
+                pushHistory(next);
+                setHoldTapModalName(null);
+                showToast('Hold-tap saved');
+            };
+
+            const createNewTapDance = () => {
+                const { config: newConfig, name } = createTapDance(config, 'my_tap_dance');
+                pushHistory(newConfig);
+                setTapDanceModalName(name);
+            };
+            const cloneTapDanceAction = (name) => {
+                const { config: newConfig, name: newName } = cloneTapDance(config, name);
+                if (!newName) return;
+                pushHistory(newConfig);
+                showToast('Tap-dance cloned');
+            };
+            const deleteTapDanceAction = async (name) => {
+                const refs = findTapDanceReferences(config, name);
+                if (refs.length > 0) {
+                    const msg = `"${name.replace('&', '')}" is still used by ${refs.length === 1 ? refs[0] : `${refs.length} other things`} — deleting it will leave those pointing at a tap-dance that no longer exists.`;
+                    if ((await askConfirm({ title: 'Tap-dance still in use', message: msg, confirmLabel: 'Delete Anyway', danger: true })) !== 'confirm') return;
+                }
+                pushHistory(deleteTapDance(config, name));
+                if (tapDanceModalName === name) setTapDanceModalName(null);
+                showToast('Tap-dance deleted');
+            };
+
+            const saveTapDanceFromModal = (oldName, updatedParsed) => {
+                let next = config;
+                const newName = updatedParsed.name;
+                if (newName !== oldName) next = renameTapDance(next, oldName, newName);
+                next = updateTapDance(next, newName, updatedParsed);
+                pushHistory(next);
+                setTapDanceModalName(null);
+                showToast('Tap-dance saved');
             };
 
             const saveCustomJson = () => {
@@ -2065,7 +3068,7 @@ const App = () => {
                 : [];
 
             return (
-                <div className="flex flex-col h-screen w-screen font-sans text-sm overflow-hidden bg-app-base text-app-text transition-colors duration-300">
+                <div className="flex flex-col h-dvh w-screen font-sans text-sm overflow-hidden bg-app-base text-app-text transition-colors duration-300">
 
                     {/* Persistent, full-width app bar. File identity (name + unsaved dot) lives
                         here rather than inside the Layers/Combos sidebar, which is now purely
@@ -2120,15 +3123,29 @@ const App = () => {
 
                 <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden" onClick={() => setActiveConfigSlot(null)}>
                     <aside style={{ width: `${leftPanelSize}px`, order: sidebarSide === 'right' ? 2 : 0 }} className={`shrink-0 bg-app-sidebar flex flex-col z-30 transition-colors relative h-full ${sidebarSide === 'right' ? 'border-l' : 'border-r'} border-app-borderHighlight`}>
-                        <div onMouseDown={handleLeftResizeStart} title="Drag to resize" className={`absolute top-0 bottom-0 w-2 cursor-col-resize z-50 flex items-center justify-center group ${sidebarSide === 'right' ? '-left-2' : '-right-2'}`}>
+                        <div onPointerDown={handleLeftResizeStart} title="Drag to resize" style={{ touchAction: 'none' }} className={`absolute top-0 bottom-0 w-3 cursor-col-resize z-50 flex items-center justify-center group ${sidebarSide === 'right' ? '-left-3' : '-right-3'}`}>
                             <div className="w-1 h-14 rounded-full bg-app-borderHighlight group-hover:bg-app-accent transition-colors"></div>
                         </div>
                         {config && (
                             <div className="p-3 border-b border-app-borderHighlight shrink-0 bg-app-surface">
-                                <div className="flex bg-app-card rounded-lg border border-app-borderHighlight p-1 shadow-inner">
+                                <div className="flex gap-1 bg-app-card rounded-lg border border-app-borderHighlight p-1 shadow-inner">
                                     <button onClick={() => { setLeftNavMode('Layers'); setEditingComboIdx(null); }} className={`flex-1 py-1.5 text-[11px] font-bold uppercase tracking-widest rounded-md transition-all ${leftNavMode === 'Layers' ? 'bg-app-accent text-white shadow-sm' : 'text-app-textMuted hover:text-app-text'}`}>Layers</button>
                                     <button onClick={() => setLeftNavMode('Combos')} className={`flex-1 py-1.5 text-[11px] font-bold uppercase tracking-widest rounded-md transition-all ${leftNavMode === 'Combos' ? 'bg-app-accent text-white shadow-sm' : 'text-app-textMuted hover:text-app-text'}`}>Combos</button>
                                 </div>
+
+                                <button onClick={() => setBehaviorLibraryExpanded((v) => !v)} title="Create and edit named, reusable ZMK behaviors: macros, sticky keys, mod-morphs, hold-taps, tap-dances" className="w-full flex items-center justify-between gap-2 mt-2 px-1 py-1.5 text-[10px] font-bold uppercase tracking-widest text-app-textMuted hover:text-app-text transition-colors">
+                                    <span>Behavior Library</span>
+                                    <span className={`transition-transform ${(behaviorLibraryExpanded || BEHAVIOR_LIBRARY_NAV_MODES.includes(leftNavMode)) ? 'rotate-90' : ''}`}>▸</span>
+                                </button>
+                                {(behaviorLibraryExpanded || BEHAVIOR_LIBRARY_NAV_MODES.includes(leftNavMode)) && (
+                                    <div className="flex flex-wrap gap-1 bg-app-card rounded-lg border border-app-borderHighlight p-1 shadow-inner mt-1">
+                                        <button onClick={() => { setLeftNavMode('Macros'); setEditingComboIdx(null); }} className={`flex-1 min-w-[30%] py-1.5 text-[11px] font-bold uppercase tracking-widest rounded-md transition-all ${leftNavMode === 'Macros' ? 'bg-app-accent text-white shadow-sm' : 'text-app-textMuted hover:text-app-text'}`}>Macros</button>
+                                        <button onClick={() => { setLeftNavMode('StickyKeys'); setEditingComboIdx(null); }} title="Sticky Keys" className={`flex-1 min-w-[30%] py-1.5 text-[11px] font-bold uppercase tracking-widest rounded-md transition-all ${leftNavMode === 'StickyKeys' ? 'bg-app-accent text-white shadow-sm' : 'text-app-textMuted hover:text-app-text'}`}>Sticky</button>
+                                        <button onClick={() => { setLeftNavMode('ModMorphs'); setEditingComboIdx(null); }} title="Mod-Morphs" className={`flex-1 min-w-[30%] py-1.5 text-[11px] font-bold uppercase tracking-widest rounded-md transition-all ${leftNavMode === 'ModMorphs' ? 'bg-app-accent text-white shadow-sm' : 'text-app-textMuted hover:text-app-text'}`}>Morphs</button>
+                                        <button onClick={() => { setLeftNavMode('HoldTaps'); setEditingComboIdx(null); }} title="Hold-Taps" className={`flex-1 min-w-[30%] py-1.5 text-[11px] font-bold uppercase tracking-widest rounded-md transition-all ${leftNavMode === 'HoldTaps' ? 'bg-app-accent text-white shadow-sm' : 'text-app-textMuted hover:text-app-text'}`}>Hold-Taps</button>
+                                        <button onClick={() => { setLeftNavMode('TapDances'); setEditingComboIdx(null); }} title="Tap-Dances" className={`flex-1 min-w-[30%] py-1.5 text-[11px] font-bold uppercase tracking-widest rounded-md transition-all ${leftNavMode === 'TapDances' ? 'bg-app-accent text-white shadow-sm' : 'text-app-textMuted hover:text-app-text'}`}>Tap-Dances</button>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -2141,27 +3158,23 @@ const App = () => {
                                         return (
                                             <div
                                                 key={i}
+                                                data-layer-idx={i}
                                                 className={`relative group flex items-center rounded-xl transition-all duration-200
                                                     ${activeLayer === i && !isZenMode ? 'bg-app-card border border-app-accent shadow-sm' : 'border border-transparent hover:border-app-borderHighlight hover:bg-app-surface'}
                                                     ${isDragged ? 'opacity-40 scale-95 border-dashed border-app-borderHighlight' : ''}
                                                     ${isDropTarget ? 'border-t-2 border-t-app-accent' : ''}
                                                 `}
-                                                draggable
-                                                onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDraggedLayerIdx(i); }}
-                                                onDragOver={(e) => { e.preventDefault(); setDragOverLayerIdx(i); }}
-                                                onDrop={(e) => { e.preventDefault(); moveLayerReorder(draggedLayerIdx, i); setDraggedLayerIdx(null); setDragOverLayerIdx(null); }}
-                                                onDragEnd={() => { setDraggedLayerIdx(null); setDragOverLayerIdx(null); }}
                                             >
                                                 {renamingLayerIdx === i ? (
                                                     <input autoFocus value={renameValue} onChange={(e) => setRenameValue(e.target.value)} onBlur={commitRenameLayer} onKeyDown={(e) => { if (e.key === 'Enter') commitRenameLayer(); if (e.key === 'Escape') setRenamingLayerIdx(null); }} className="w-full mx-2 my-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-black outline-none shadow-sm min-w-0" />
                                                 ) : (
                                                     <>
-                                                        <div className="px-3 cursor-grab opacity-20 group-hover:opacity-60 hover:!opacity-100 text-app-textMuted text-[12px] flex items-center justify-center shrink-0 transition-opacity" title="Drag to reorder">∷</div>
+                                                        <div onPointerDown={(e) => handleLayerPointerDown(e, i)} style={{ touchAction: 'none' }} className="px-3 py-2 -my-2 cursor-grab opacity-20 group-hover:opacity-60 hover:!opacity-100 text-app-textMuted text-[12px] flex items-center justify-center shrink-0 transition-opacity" title="Drag to reorder">∷</div>
                                                         <div onClick={() => { setActiveLayer(i); setSelectedKey(null); setEditingComboIdx(null); }} onDoubleClick={() => startRenameLayer(i, displayName)} className="flex-1 flex items-center gap-2 py-2.5 min-w-0 cursor-pointer pr-4" title="Double-click to rename">
                                                             <span className="opacity-50 font-mono text-[10px] w-3 text-right shrink-0">{i}</span>
                                                             <span className={`min-w-0 flex-1 truncate font-bold text-xs ${activeLayer === i && !isZenMode ? 'text-app-accent' : ''}`}>{displayName}</span>
                                                         </div>
-                                                        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity pr-2 shrink-0 bg-app-surface/50 backdrop-blur-md rounded px-1 py-0.5 shadow-sm border border-app-borderHighlight absolute right-1">
+                                                        <div className={`flex items-center transition-opacity pr-2 shrink-0 bg-app-surface/50 backdrop-blur-md rounded px-1 py-0.5 shadow-sm border border-app-borderHighlight absolute right-1 ${activeLayer === i && !isZenMode ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                                                             <button onClick={(e) => { e.stopPropagation(); cloneLayer(i); }} className="w-6 h-6 flex items-center justify-center text-app-textMuted hover:text-app-text hover:bg-white/10 rounded transition-colors" title="Clone layer">⧉</button>
                                                             <button onClick={(e) => { e.stopPropagation(); startRenameLayer(i, displayName); }} className="w-6 h-6 flex items-center justify-center text-app-textMuted hover:text-app-text hover:bg-white/10 rounded transition-colors" title="Rename layer">✎</button>
                                                             {config.layers.length > 1 && ( <button onClick={(e) => { e.stopPropagation(); deleteLayer(i); }} className="w-6 h-6 flex items-center justify-center text-red-500/70 hover:text-red-400 hover:bg-red-900/50 rounded transition-colors" title="Delete layer">🗑️</button> )}
@@ -2211,7 +3224,7 @@ const App = () => {
                                                         <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] shrink-0 ${editingComboIdx === idx ? 'bg-app-accent text-white' : 'bg-app-panel border border-app-borderHighlight text-app-textMuted'}`}>C{idx + 1}</span>
                                                         <span className={`min-w-0 flex-1 truncate ${editingComboIdx === idx ? 'text-app-text' : 'text-app-textMuted'}`}>{combo.name || `Combo ${idx+1}`}</span>
                                                     </div>
-                                                    <button onClick={(e) => { e.stopPropagation(); const n = structuredClone(config); n.combos.splice(idx, 1); pushHistory(n); if (editingComboIdx === idx) { setEditingComboIdx(null); } showToast('Combo deleted'); }} className="w-6 h-6 flex items-center justify-center text-app-textMuted hover:text-red-400 hover:bg-red-900/30 rounded transition-colors opacity-0 group-hover:opacity-100 shrink-0">🗑️</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); const n = structuredClone(config); n.combos.splice(idx, 1); pushHistory(n); if (editingComboIdx === idx) { setEditingComboIdx(null); } showToast('Combo deleted'); }} className={`w-6 h-6 flex items-center justify-center text-app-textMuted hover:text-red-400 hover:bg-red-900/30 rounded transition-colors shrink-0 ${editingComboIdx === idx ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>🗑️</button>
                                                 </div>
                                                 <MiniKeyboardMap geo={keyboardGeo} selectedKeys={keyPositions} readonly={true} size={64} />
                                                 {(combo.layers || []).includes(-1) ? (
@@ -2228,6 +3241,196 @@ const App = () => {
                                             </div>
                                         );
                                     })}
+                                </div>
+                            )}
+
+                            {config && leftNavMode === 'Macros' && (
+                                <div className="p-4 flex flex-col gap-2">
+                                    <button onClick={createNewMacro} className="w-full py-2.5 rounded-lg border border-dashed border-app-borderHighlight text-app-textMuted hover:text-app-text hover:border-app-textMuted hover:bg-app-card flex items-center justify-center gap-2 transition-all font-semibold text-xs hover:-translate-y-px shrink-0 mb-3">
+                                       <span className="text-lg leading-none mt-[-2px]">+</span> Create Macro
+                                    </button>
+
+                                    {(config.macros || []).length > 0 && (
+                                        <div className="relative mb-3">
+                                            <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-app-textMuted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                            <input type="text" value={macroSearchText} onChange={(e) => setMacroSearchText(e.target.value)} placeholder="Search by name or description..." className="w-full bg-app-card border border-app-borderHighlight rounded-lg pl-8 pr-7 py-1.5 text-[11px] text-app-text placeholder-app-textMuted outline-none focus:border-app-text transition-colors" />
+                                            {macroSearchText && <button onClick={() => setMacroSearchText('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-app-textMuted hover:text-app-text text-xs">✕</button>}
+                                        </div>
+                                    )}
+
+                                    {(config.macros || []).length === 0 && <div className="text-app-textMuted text-xs italic text-center py-4">No macros created yet.</div>}
+                                    {(config.macros || []).length > 0 && filteredMacros.length === 0 && <div className="text-app-textMuted text-xs italic text-center py-4">No macros match your search.</div>}
+
+                                    {filteredMacros.map(({ macro, idx }) => {
+                                        const stepCount = (macro.bindings || []).length;
+                                        return (
+                                            <div key={idx} onClick={() => setMacroModalName(macro.name)} className="flex flex-col gap-1 p-2.5 rounded-xl text-xs font-bold transition-all border cursor-pointer relative group border-transparent hover:border-app-borderHighlight hover:bg-app-surface">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                        <span className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] shrink-0 bg-app-panel border border-app-borderHighlight text-app-textMuted">M</span>
+                                                        <span className="min-w-0 flex-1 truncate text-app-textMuted group-hover:text-app-text">{(macro.name || '').replace('&', '')}</span>
+                                                    </div>
+                                                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                                        <button onClick={(e) => { e.stopPropagation(); cloneMacroAction(macro.name); }} className="w-6 h-6 flex items-center justify-center text-app-textMuted hover:text-app-text hover:bg-white/10 rounded transition-colors" title="Clone macro">⧉</button>
+                                                        <button onClick={(e) => { e.stopPropagation(); deleteMacroAction(macro.name); }} className="w-6 h-6 flex items-center justify-center text-app-textMuted hover:text-red-400 hover:bg-red-900/30 rounded transition-colors" title="Delete macro">🗑️</button>
+                                                    </div>
+                                                </div>
+                                                {macro.description && <p className="text-[10px] font-medium text-app-textMuted normal-case truncate pl-7">{macro.description}</p>}
+                                                <p className="text-[9px] font-semibold text-app-textMuted normal-case pl-7 opacity-60">{stepCount} step{stepCount !== 1 ? 's' : ''}</p>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {config && leftNavMode === 'StickyKeys' && (
+                                <div className="p-4 flex flex-col gap-2">
+                                    <button onClick={createNewStickyKey} className="w-full py-2.5 rounded-lg border border-dashed border-app-borderHighlight text-app-textMuted hover:text-app-text hover:border-app-textMuted hover:bg-app-card flex items-center justify-center gap-2 transition-all font-semibold text-xs hover:-translate-y-px shrink-0 mb-3">
+                                       <span className="text-lg leading-none mt-[-2px]">+</span> Create Sticky Key
+                                    </button>
+
+                                    {(config.stickyKeys || []).length > 0 && (
+                                        <div className="relative mb-3">
+                                            <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-app-textMuted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                            <input type="text" value={stickyKeySearchText} onChange={(e) => setStickyKeySearchText(e.target.value)} placeholder="Search by name or description..." className="w-full bg-app-card border border-app-borderHighlight rounded-lg pl-8 pr-7 py-1.5 text-[11px] text-app-text placeholder-app-textMuted outline-none focus:border-app-text transition-colors" />
+                                            {stickyKeySearchText && <button onClick={() => setStickyKeySearchText('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-app-textMuted hover:text-app-text text-xs">✕</button>}
+                                        </div>
+                                    )}
+
+                                    {(config.stickyKeys || []).length === 0 && <div className="text-app-textMuted text-xs italic text-center py-4">No sticky keys created yet.</div>}
+                                    {(config.stickyKeys || []).length > 0 && filteredStickyKeys.length === 0 && <div className="text-app-textMuted text-xs italic text-center py-4">No sticky keys match your search.</div>}
+
+                                    {filteredStickyKeys.map(({ stickyKey, idx }) => (
+                                        <div key={idx} onClick={() => setStickyKeyModalName(stickyKey.name)} className="flex flex-col gap-1 p-2.5 rounded-xl text-xs font-bold transition-all border cursor-pointer relative group border-transparent hover:border-app-borderHighlight hover:bg-app-surface">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                    <span className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] shrink-0 bg-app-panel border border-app-borderHighlight text-app-textMuted">📌</span>
+                                                    <span className="min-w-0 flex-1 truncate text-app-textMuted group-hover:text-app-text">{(stickyKey.name || '').replace('&', '')}</span>
+                                                </div>
+                                                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                                    <button onClick={(e) => { e.stopPropagation(); cloneStickyKeyAction(stickyKey.name); }} className="w-6 h-6 flex items-center justify-center text-app-textMuted hover:text-app-text hover:bg-white/10 rounded transition-colors" title="Clone sticky key">⧉</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); deleteStickyKeyAction(stickyKey.name); }} className="w-6 h-6 flex items-center justify-center text-app-textMuted hover:text-red-400 hover:bg-red-900/30 rounded transition-colors" title="Delete sticky key">🗑️</button>
+                                                </div>
+                                            </div>
+                                            {stickyKey.description && <p className="text-[10px] font-medium text-app-textMuted normal-case truncate pl-7">{stickyKey.description}</p>}
+                                            <p className="text-[9px] font-semibold text-app-textMuted normal-case pl-7 opacity-60">{[
+                                                stickyKey.quickRelease ? 'quick release' : null,
+                                                stickyKey.lazy ? 'lazy' : null,
+                                                typeof stickyKey.releaseAfterMs === 'number' ? `${stickyKey.releaseAfterMs}ms` : null,
+                                            ].filter(Boolean).join(' · ') || 'defaults'}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {config && leftNavMode === 'ModMorphs' && (
+                                <div className="p-4 flex flex-col gap-2">
+                                    <button onClick={createNewModMorph} className="w-full py-2.5 rounded-lg border border-dashed border-app-borderHighlight text-app-textMuted hover:text-app-text hover:border-app-textMuted hover:bg-app-card flex items-center justify-center gap-2 transition-all font-semibold text-xs hover:-translate-y-px shrink-0 mb-3">
+                                       <span className="text-lg leading-none mt-[-2px]">+</span> Create Mod-Morph
+                                    </button>
+
+                                    {(config.modMorphs || []).length > 0 && (
+                                        <div className="relative mb-3">
+                                            <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-app-textMuted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                            <input type="text" value={modMorphSearchText} onChange={(e) => setModMorphSearchText(e.target.value)} placeholder="Search by name or description..." className="w-full bg-app-card border border-app-borderHighlight rounded-lg pl-8 pr-7 py-1.5 text-[11px] text-app-text placeholder-app-textMuted outline-none focus:border-app-text transition-colors" />
+                                            {modMorphSearchText && <button onClick={() => setModMorphSearchText('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-app-textMuted hover:text-app-text text-xs">✕</button>}
+                                        </div>
+                                    )}
+
+                                    {(config.modMorphs || []).length === 0 && <div className="text-app-textMuted text-xs italic text-center py-4">No mod-morphs created yet.</div>}
+                                    {(config.modMorphs || []).length > 0 && filteredModMorphs.length === 0 && <div className="text-app-textMuted text-xs italic text-center py-4">No mod-morphs match your search.</div>}
+
+                                    {filteredModMorphs.map(({ modMorph, idx }) => {
+                                        const mods = modMorph.cases?.[1]?.mods || [];
+                                        return (
+                                            <div key={idx} onClick={() => setModMorphModalName(modMorph.name)} className="flex flex-col gap-1 p-2.5 rounded-xl text-xs font-bold transition-all border cursor-pointer relative group border-transparent hover:border-app-borderHighlight hover:bg-app-surface">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                        <span className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] shrink-0 bg-app-panel border border-app-borderHighlight text-app-textMuted">⇄</span>
+                                                        <span className="min-w-0 flex-1 truncate text-app-textMuted group-hover:text-app-text">{(modMorph.name || '').replace('&', '')}</span>
+                                                    </div>
+                                                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                                        <button onClick={(e) => { e.stopPropagation(); cloneModMorphAction(modMorph.name); }} className="w-6 h-6 flex items-center justify-center text-app-textMuted hover:text-app-text hover:bg-white/10 rounded transition-colors" title="Clone mod-morph">⧉</button>
+                                                        <button onClick={(e) => { e.stopPropagation(); deleteModMorphAction(modMorph.name); }} className="w-6 h-6 flex items-center justify-center text-app-textMuted hover:text-red-400 hover:bg-red-900/30 rounded transition-colors" title="Delete mod-morph">🗑️</button>
+                                                    </div>
+                                                </div>
+                                                {modMorph.description && <p className="text-[10px] font-medium text-app-textMuted normal-case truncate pl-7">{modMorph.description}</p>}
+                                                <p className="text-[9px] font-semibold text-app-textMuted normal-case pl-7 opacity-60">{mods.length > 0 ? mods.map((m) => m.replace('MOD_', '')).join(' + ') : 'no trigger mods set'}</p>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {config && leftNavMode === 'HoldTaps' && (
+                                <div className="p-4 flex flex-col gap-2">
+                                    <button onClick={createNewHoldTap} className="w-full py-2.5 rounded-lg border border-dashed border-app-borderHighlight text-app-textMuted hover:text-app-text hover:border-app-textMuted hover:bg-app-card flex items-center justify-center gap-2 transition-all font-semibold text-xs hover:-translate-y-px shrink-0 mb-3">
+                                       <span className="text-lg leading-none mt-[-2px]">+</span> Create Hold-Tap
+                                    </button>
+
+                                    {(config.holdTaps || []).length > 0 && (
+                                        <div className="relative mb-3">
+                                            <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-app-textMuted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                            <input type="text" value={holdTapSearchText} onChange={(e) => setHoldTapSearchText(e.target.value)} placeholder="Search by name or description..." className="w-full bg-app-card border border-app-borderHighlight rounded-lg pl-8 pr-7 py-1.5 text-[11px] text-app-text placeholder-app-textMuted outline-none focus:border-app-text transition-colors" />
+                                            {holdTapSearchText && <button onClick={() => setHoldTapSearchText('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-app-textMuted hover:text-app-text text-xs">✕</button>}
+                                        </div>
+                                    )}
+
+                                    {(config.holdTaps || []).length === 0 && <div className="text-app-textMuted text-xs italic text-center py-4">No hold-taps created yet.</div>}
+                                    {(config.holdTaps || []).length > 0 && filteredHoldTaps.length === 0 && <div className="text-app-textMuted text-xs italic text-center py-4">No hold-taps match your search.</div>}
+
+                                    {filteredHoldTaps.map(({ holdTap, idx }) => (
+                                        <div key={idx} onClick={() => setHoldTapModalName(holdTap.name)} className="flex flex-col gap-1 p-2.5 rounded-xl text-xs font-bold transition-all border cursor-pointer relative group border-transparent hover:border-app-borderHighlight hover:bg-app-surface">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                    <span className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] shrink-0 bg-app-panel border border-app-borderHighlight text-app-textMuted">⏱️</span>
+                                                    <span className="min-w-0 flex-1 truncate text-app-textMuted group-hover:text-app-text">{(holdTap.name || '').replace('&', '')}</span>
+                                                </div>
+                                                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                                    <button onClick={(e) => { e.stopPropagation(); cloneHoldTapAction(holdTap.name); }} className="w-6 h-6 flex items-center justify-center text-app-textMuted hover:text-app-text hover:bg-white/10 rounded transition-colors" title="Clone hold-tap">⧉</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); deleteHoldTapAction(holdTap.name); }} className="w-6 h-6 flex items-center justify-center text-app-textMuted hover:text-red-400 hover:bg-red-900/30 rounded transition-colors" title="Delete hold-tap">🗑️</button>
+                                                </div>
+                                            </div>
+                                            {holdTap.description && <p className="text-[10px] font-medium text-app-textMuted normal-case truncate pl-7">{holdTap.description}</p>}
+                                            <p className="text-[9px] font-semibold text-app-textMuted normal-case pl-7 opacity-60">{(holdTap.flavor || 'tap-preferred')}{(holdTap.bindings || []).length >= 2 ? ` · ${(holdTap.bindings[0] || '').replace('&', '')} / ${(holdTap.bindings[1] || '').replace('&', '')}` : ''}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {config && leftNavMode === 'TapDances' && (
+                                <div className="p-4 flex flex-col gap-2">
+                                    <button onClick={createNewTapDance} className="w-full py-2.5 rounded-lg border border-dashed border-app-borderHighlight text-app-textMuted hover:text-app-text hover:border-app-textMuted hover:bg-app-card flex items-center justify-center gap-2 transition-all font-semibold text-xs hover:-translate-y-px shrink-0 mb-3">
+                                       <span className="text-lg leading-none mt-[-2px]">+</span> Create Tap-Dance
+                                    </button>
+
+                                    {(config.tapDances || []).length > 0 && (
+                                        <div className="relative mb-3">
+                                            <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-app-textMuted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                            <input type="text" value={tapDanceSearchText} onChange={(e) => setTapDanceSearchText(e.target.value)} placeholder="Search by name or description..." className="w-full bg-app-card border border-app-borderHighlight rounded-lg pl-8 pr-7 py-1.5 text-[11px] text-app-text placeholder-app-textMuted outline-none focus:border-app-text transition-colors" />
+                                            {tapDanceSearchText && <button onClick={() => setTapDanceSearchText('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-app-textMuted hover:text-app-text text-xs">✕</button>}
+                                        </div>
+                                    )}
+
+                                    {(config.tapDances || []).length === 0 && <div className="text-app-textMuted text-xs italic text-center py-4">No tap-dances created yet.</div>}
+                                    {(config.tapDances || []).length > 0 && filteredTapDances.length === 0 && <div className="text-app-textMuted text-xs italic text-center py-4">No tap-dances match your search.</div>}
+
+                                    {filteredTapDances.map(({ tapDance, idx }) => (
+                                        <div key={idx} onClick={() => setTapDanceModalName(tapDance.name)} className="flex flex-col gap-1 p-2.5 rounded-xl text-xs font-bold transition-all border cursor-pointer relative group border-transparent hover:border-app-borderHighlight hover:bg-app-surface">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                    <span className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] shrink-0 bg-app-panel border border-app-borderHighlight text-app-textMuted">🔀</span>
+                                                    <span className="min-w-0 flex-1 truncate text-app-textMuted group-hover:text-app-text">{(tapDance.name || '').replace('&', '')}</span>
+                                                </div>
+                                                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                                    <button onClick={(e) => { e.stopPropagation(); cloneTapDanceAction(tapDance.name); }} className="w-6 h-6 flex items-center justify-center text-app-textMuted hover:text-app-text hover:bg-white/10 rounded transition-colors" title="Clone tap-dance">⧉</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); deleteTapDanceAction(tapDance.name); }} className="w-6 h-6 flex items-center justify-center text-app-textMuted hover:text-red-400 hover:bg-red-900/30 rounded transition-colors" title="Delete tap-dance">🗑️</button>
+                                                </div>
+                                            </div>
+                                            {tapDance.description && <p className="text-[10px] font-medium text-app-textMuted normal-case truncate pl-7">{tapDance.description}</p>}
+                                            <p className="text-[9px] font-semibold text-app-textMuted normal-case pl-7 opacity-60">{(tapDance.bindings || []).length} taps</p>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
 
@@ -2261,7 +3464,7 @@ const App = () => {
 
                         {config && (
                             <aside style={{ [layoutMode === 'right' ? 'width' : 'height']: `${panelSize}px` }} className={`shrink-0 flex ${layoutMode === 'right' ? 'flex-col border-l shadow-[-20px_0_40px_rgba(0,0,0,0.5)]' : 'flex-row border-t shadow-[0_-20px_40px_rgba(0,0,0,0.5)]'} bg-app-sidebar border-app-borderHighlight z-40 relative transition-colors`} onClick={e => e.stopPropagation()}>
-                                <div onMouseDown={handleRightResizeStart} title="Drag to resize" className={`absolute ${layoutMode === 'right' ? 'top-0 bottom-0 left-[-8px] w-2 cursor-col-resize flex-col' : '-top-2 left-0 right-0 h-4 cursor-row-resize flex-row'} z-50 flex items-center justify-center group`}><div className={`${layoutMode === 'right' ? 'w-1 h-14' : 'w-14 h-1'} rounded-full bg-app-borderHighlight group-hover:bg-app-accent transition-colors`}></div></div>
+                                <div onPointerDown={handleRightResizeStart} title="Drag to resize" style={{ touchAction: 'none' }} className={`absolute ${layoutMode === 'right' ? 'top-0 bottom-0 left-[-12px] w-3 cursor-col-resize flex-col' : '-top-3 left-0 right-0 h-6 cursor-row-resize flex-row'} z-50 flex items-center justify-center group`}><div className={`${layoutMode === 'right' ? 'w-1 h-14' : 'w-14 h-1'} rounded-full bg-app-borderHighlight group-hover:bg-app-accent transition-colors`}></div></div>
 
                                 <div className={`${layoutMode === 'right' ? 'p-6 border-b max-h-[50vh]' : 'w-[360px] p-6 border-r'} border-app-borderHighlight shrink-0 bg-app-surface flex flex-col overflow-y-auto`}>
                                     <div className="text-app-text mb-6 text-[15px] flex justify-between items-center px-1">
@@ -2645,6 +3848,59 @@ const App = () => {
                             layerNames={layerNames}
                             onClose={() => setTouchpadModalIndex(null)}
                             onSave={(parsed) => { pushHistory(setTouchpadConfig(config, touchpadModalIndex, parsed)); showToast('Touchpad settings updated'); setTouchpadModalIndex(null); }}
+                        />
+                    )}
+
+                    {config && macroModalName !== null && (config.macros || []).some((m) => m.name === macroModalName) && (
+                        <MacroBuilderModal
+                            key={macroModalName}
+                            name={macroModalName}
+                            config={config}
+                            layerNames={layerNames}
+                            onClose={() => setMacroModalName(null)}
+                            onSave={saveMacroFromModal}
+                        />
+                    )}
+
+                    {config && stickyKeyModalName !== null && (config.stickyKeys || []).some((s) => s.name === stickyKeyModalName) && (
+                        <StickyKeyBuilderModal
+                            key={stickyKeyModalName}
+                            name={stickyKeyModalName}
+                            config={config}
+                            onClose={() => setStickyKeyModalName(null)}
+                            onSave={saveStickyKeyFromModal}
+                        />
+                    )}
+
+                    {config && modMorphModalName !== null && (config.modMorphs || []).some((m) => m.name === modMorphModalName) && (
+                        <ModMorphBuilderModal
+                            key={modMorphModalName}
+                            name={modMorphModalName}
+                            config={config}
+                            layerNames={layerNames}
+                            onClose={() => setModMorphModalName(null)}
+                            onSave={saveModMorphFromModal}
+                        />
+                    )}
+
+                    {config && holdTapModalName !== null && (config.holdTaps || []).some((h) => h.name === holdTapModalName) && (
+                        <HoldTapBuilderModal
+                            key={holdTapModalName}
+                            name={holdTapModalName}
+                            config={config}
+                            onClose={() => setHoldTapModalName(null)}
+                            onSave={saveHoldTapFromModal}
+                        />
+                    )}
+
+                    {config && tapDanceModalName !== null && (config.tapDances || []).some((t) => t.name === tapDanceModalName) && (
+                        <TapDanceBuilderModal
+                            key={tapDanceModalName}
+                            name={tapDanceModalName}
+                            config={config}
+                            layerNames={layerNames}
+                            onClose={() => setTapDanceModalName(null)}
+                            onSave={saveTapDanceFromModal}
                         />
                     )}
 
