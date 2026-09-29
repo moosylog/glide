@@ -57,12 +57,11 @@
         .canvas-container:active { cursor: grabbing; }
 
         .p-key-outer { position: absolute; cursor: pointer; z-index: 1; user-select: none; transition: transform 0.15s ease; }
-        .p-key-outer.is-touchpad { cursor: not-allowed !important; }
-       
-        .p-key-outer:not(.is-touchpad):hover { z-index: 20; }
+
+        .p-key-outer:hover { z-index: 20; }
         .p-key-outer.selected { z-index: 30; }
         .p-key-outer.combo-highlight { z-index: 25; }
-       
+
         .p-key {
             width: 100%; height: 100%; border-radius: 6px;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -73,10 +72,10 @@
             padding: 4px; text-align: center; overflow: hidden; color: var(--text-main);
         }
         .p-key.is-round { border-radius: 50%; }
-       
-        .p-key:not(.is-touchpad):active { transform: scale(0.96) translateY(1px); box-shadow: inset 0 2px 4px var(--key-shadow); filter: brightness(0.9); }
-       
-        .p-key:not(.is-touchpad):hover {
+
+        .p-key:active { transform: scale(0.96) translateY(1px); box-shadow: inset 0 2px 4px var(--key-shadow); filter: brightness(0.9); }
+
+        .p-key:hover {
             transform: scale(1.05) translateY(-2px);
             border-color: var(--border-highlight); filter: brightness(1.1);
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), inset 0 -2px 0 var(--key-shadow), 0 8px 18px rgba(0,0,0,0.5);
@@ -160,6 +159,7 @@
         <script src="core/zmk/naming.js"></script>
     <script src="core/zmk/layerPointers.js"></script>
     <script src="core/zmk/combos.js"></script>
+    <script src="core/zmk/inputProcessors.js"></script>
     <script src="core/keycodes/zmkMap.js"></script>
     <script src="core/keycodes/modChain.js"></script>
     <script src="core/geometry/convertGeo.js"></script>
@@ -262,7 +262,15 @@ const { useState, useEffect, useMemo, useCallback, memo, useRef } = React;
             isFlowCompatible,
             runJqScript,
             applyFlow,
-            BUILTIN_FLOWS_CATALOG
+            BUILTIN_FLOWS_CATALOG,
+            isTouchpadIndex,
+            TOUCHPAD_LABEL_BY_INDEX,
+            getTouchpadConfig,
+            setTouchpadConfig,
+            parseChain,
+            CLICK_MAPPER_CODE_BY_TARGET,
+            CLICK_TARGET_LABELS,
+            UNVERIFIED_CLICK_TARGETS
         } = window.GlideCore;
 
 
@@ -536,6 +544,174 @@ const { useState, useEffect, useMemo, useCallback, memo, useRef } = React;
                                 <button onClick={() => onChoice('cancel')} className="flex-1 py-2.5 rounded-xl text-xs font-bold border border-app-borderHighlight text-app-textMuted hover:text-app-text hover:bg-app-card transition-all">{state.cancelLabel || 'Cancel'}</button>
                                 <button onClick={() => onChoice('confirm')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all border-none shadow-lg hover:-translate-y-px ${state.danger ? 'bg-red-600 hover:bg-red-500 text-white' : 'btn-active'}`}>{state.confirmLabel || 'Confirm'}</button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Settings for one of Go60's two Cirque trackpads (key positions 60/61 — see
+        // core/zmk/inputProcessors.js's header for why this corner of the format is encoded
+        // differently from an ordinary key binding). Modeled on the same idea as MoErgo's own
+        // touchpad editor — a "Default" config plus a short list of per-layer overrides — but
+        // built to match the rest of GLIDE rather than copied pixel-for-pixel: the left rail
+        // mirrors the Layers list's own look, and every control here edits a local draft; only
+        // Apply writes it back (through pushHistory, so it's a normal undoable edit like any
+        // other), and Cancel/backdrop-click/Esc discard the draft with zero side effects.
+        const TouchpadSettingsModal = ({ index, config, layerNames, onClose, onSave }) => {
+            const [parsed, setParsed] = useState(() => getTouchpadConfig(config, index).parsed);
+            const [selected, setSelected] = useState({ type: 'base' });
+
+            const activeChain = selected.type === 'base' ? parsed.base : parsed.overrides[selected.idx]?.chain;
+
+            const updateChain = (mutator) => setParsed((prev) => {
+                const next = structuredClone(prev);
+                const chain = selected.type === 'base' ? next.base : next.overrides[selected.idx].chain;
+                mutator(chain);
+                return next;
+            });
+
+            const usedLayers = new Set(parsed.overrides.flatMap((o) => o.layers));
+            const availableLayers = layerNames.map((_, i) => i).filter((i) => !usedLayers.has(i));
+
+            const addOverride = (layerIdx) => {
+                setParsed((prev) => ({ ...prev, overrides: [...prev.overrides, { id: null, layers: [layerIdx], chain: parseChain([]) }] }));
+                setSelected({ type: 'override', idx: parsed.overrides.length });
+            };
+            const removeOverride = (idx) => {
+                setParsed((prev) => ({ ...prev, overrides: prev.overrides.filter((_, i) => i !== idx) }));
+                if (selected.type === 'override' && selected.idx === idx) setSelected({ type: 'base' });
+                else if (selected.type === 'override' && selected.idx > idx) setSelected({ type: 'override', idx: selected.idx - 1 });
+            };
+
+            if (!activeChain) return null;
+            const advancedCount = (activeChain.extra?.length || 0) + (activeChain.extraFlags?.length || 0);
+            const ratio = activeChain.multiplier / activeChain.divisor;
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={onClose}>
+                    <div data-testid="touchpad-modal" className="bg-app-surface border border-app-borderHighlight rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-app-borderHighlight shrink-0">
+                            <h3 className="text-base font-bold text-app-text flex items-center gap-2">
+                                <svg className="w-5 h-5 text-app-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2" strokeWidth="1.8"></rect><path d="M3 15h18" strokeWidth="1.8" strokeLinecap="round"></path></svg>
+                                {TOUCHPAD_LABEL_BY_INDEX[index]}
+                            </h3>
+                            <button onClick={onClose} className="text-app-textMuted hover:text-app-text text-xl leading-none">&times;</button>
+                        </div>
+
+                        <div className="flex flex-1 min-h-0">
+                            <div className="w-48 shrink-0 border-r border-app-borderHighlight overflow-y-auto p-3 flex flex-col gap-1">
+                                <button onClick={() => setSelected({ type: 'base' })} className={`text-left px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${selected.type === 'base' ? 'bg-app-accent text-white shadow-sm' : 'text-app-text hover:bg-app-card'}`}>
+                                    Default
+                                    <div className={`text-[10px] font-medium mt-0.5 ${selected.type === 'base' ? 'text-white/70' : 'text-app-textMuted'}`}>All other layers</div>
+                                </button>
+                                {parsed.overrides.map((ov, i) => (
+                                    <div key={i} className={`group flex items-center rounded-lg transition-all ${selected.type === 'override' && selected.idx === i ? 'bg-app-accent text-white shadow-sm' : 'hover:bg-app-card'}`}>
+                                        <button onClick={() => setSelected({ type: 'override', idx: i })} className="flex-1 text-left px-3 py-2.5 text-xs font-bold min-w-0 truncate">
+                                            {ov.layers.map((l) => layerNames[l] || `Layer ${l}`).join(', ')}
+                                        </button>
+                                        <button onClick={() => removeOverride(i)} title="Remove this override" className={`w-7 h-7 mr-1 rounded flex items-center justify-center shrink-0 transition-colors ${selected.type === 'override' && selected.idx === i ? 'text-white/70 hover:text-white hover:bg-white/10' : 'text-app-textMuted hover:text-red-400 hover:bg-red-900/30'}`}>🗑️</button>
+                                    </div>
+                                ))}
+                                {availableLayers.length > 0 && (
+                                    <select value="" onChange={(e) => addOverride(Number(e.target.value))} className="mt-1 w-full bg-app-card border border-dashed border-app-borderHighlight text-app-textMuted text-xs font-semibold rounded-lg px-2.5 py-2 outline-none cursor-pointer hover:text-app-text hover:border-app-textMuted transition-colors">
+                                        <option value="" disabled>+ Add layer override…</option>
+                                        {availableLayers.map((i) => <option key={i} value={i}>{layerNames[i] || `Layer ${i}`}</option>)}
+                                    </select>
+                                )}
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Behavior</label>
+                                    <div className="flex gap-2 bg-app-card p-1 rounded-xl border border-app-borderHighlight w-fit">
+                                        <button onClick={() => updateChain((c) => { c.mode = 'movement'; })} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${activeChain.mode === 'movement' ? 'bg-app-accent text-white shadow-sm' : 'text-app-textMuted hover:text-app-text'}`}>Movement</button>
+                                        <button onClick={() => updateChain((c) => { c.mode = 'scroll'; })} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${activeChain.mode === 'scroll' ? 'bg-app-accent text-white shadow-sm' : 'text-app-textMuted hover:text-app-text'}`}>Scroll</button>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Sensitivity</label>
+                                        <label className="flex items-center gap-2 text-xs font-semibold text-app-textMuted cursor-pointer select-none">
+                                            <input type="checkbox" checked={activeChain.disabled} onChange={(e) => updateChain((c) => { c.disabled = e.target.checked; })} className="accent-app-accent w-3.5 h-3.5" />
+                                            Disable
+                                        </label>
+                                    </div>
+                                    <div className={`flex items-center gap-3 ${activeChain.disabled ? 'opacity-40 pointer-events-none' : ''}`}>
+                                        <input type="range" min="1" max="16" step="1" value={activeChain.multiplier} onChange={(e) => updateChain((c) => { c.multiplier = Number(e.target.value); })} className="flex-1 accent-app-accent" />
+                                        <div className="flex items-center gap-1 text-xs font-mono text-app-textMuted shrink-0">
+                                            <input type="number" min="1" value={activeChain.multiplier} onChange={(e) => updateChain((c) => { c.multiplier = Math.max(1, Number(e.target.value) || 1); })} className="w-12 bg-app-card border border-app-borderHighlight rounded px-1.5 py-1 text-center outline-none" />
+                                            <span>/</span>
+                                            <input type="number" min="1" value={activeChain.divisor} onChange={(e) => updateChain((c) => { c.divisor = Math.max(1, Number(e.target.value) || 1); })} className="w-12 bg-app-card border border-app-borderHighlight rounded px-1.5 py-1 text-center outline-none" />
+                                        </div>
+                                        <span className="text-xs font-bold text-app-accent w-12 text-right shrink-0">×{ratio.toFixed(2)}</span>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Orientation</label>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => updateChain((c) => { c.flipX = !c.flipX; })} className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-all ${activeChain.flipX ? 'bg-app-accent text-white border-app-accent shadow-sm' : 'border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-card'}`}>Flip Horizontal</button>
+                                        <button onClick={() => updateChain((c) => { c.flipY = !c.flipY; })} className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-all ${activeChain.flipY ? 'bg-app-accent text-white border-app-accent shadow-sm' : 'border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-card'}`}>Flip Vertical</button>
+                                        <button onClick={() => updateChain((c) => { c.swapped = !c.swapped; })} className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-all ${activeChain.swapped ? 'bg-app-accent text-white border-app-accent shadow-sm' : 'border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-card'}`}>Swap X/Y</button>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Mouse Click</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {Object.keys(CLICK_TARGET_LABELS).map((target) => (
+                                            <button
+                                                key={target}
+                                                onClick={() => updateChain((c) => { c.clickTarget = target; })}
+                                                title={UNVERIFIED_CLICK_TARGETS.includes(target) ? 'Uses MoErgo\'s naming pattern for click remaps — not yet confirmed against a real export. Flag it if your firmware doesn\'t build.' : undefined}
+                                                className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${activeChain.clickTarget === target ? 'bg-app-accent text-white border-app-accent shadow-sm' : 'border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-card'}`}
+                                            >
+                                                {CLICK_TARGET_LABELS[target]}
+                                                {UNVERIFIED_CLICK_TARGETS.includes(target) && <span className="ml-1 opacity-60">†</span>}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {UNVERIFIED_CLICK_TARGETS.includes(activeChain.clickTarget) && (
+                                        <p className="text-[11px] text-app-textMuted italic">† This target's devicetree name follows MoErgo's confirmed pattern but hasn't been verified against a real export yet — let us know if your firmware fails to build with it selected.</p>
+                                    )}
+                                </div>
+
+                                <div className="flex flex-col gap-3 pt-2 border-t border-app-borderHighlight">
+                                    <label className="flex items-center justify-between gap-3 cursor-pointer select-none">
+                                        <div>
+                                            <span className="text-xs font-bold text-app-text">Temporary Layer</span>
+                                            <p className="text-[11px] text-app-textMuted mt-0.5">Enable a layer while this trackpad keeps receiving events, then fall back automatically.</p>
+                                        </div>
+                                        <span className="relative inline-block w-10 h-5 shrink-0">
+                                            <input type="checkbox" checked={!!activeChain.tempLayer} onChange={(e) => updateChain((c) => { c.tempLayer = e.target.checked ? { layer: 0, timeoutMs: 1000 } : null; })} className="peer sr-only" />
+                                            <span className="absolute inset-0 rounded-full bg-app-card border border-app-borderHighlight peer-checked:bg-app-accent peer-checked:border-app-accent transition-colors"></span>
+                                            <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5"></span>
+                                        </span>
+                                    </label>
+                                    {activeChain.tempLayer && (
+                                        <div className="flex items-center gap-3 pl-1">
+                                            <select value={activeChain.tempLayer.layer} onChange={(e) => updateChain((c) => { c.tempLayer.layer = Number(e.target.value); })} className="flex-1 bg-app-card border border-app-borderHighlight text-app-text text-xs font-semibold rounded-lg px-2.5 py-2 outline-none cursor-pointer">
+                                                {layerNames.map((name, i) => <option key={i} value={i}>{name || `Layer ${i}`}</option>)}
+                                            </select>
+                                            <div className="flex items-center gap-1.5 text-xs font-mono text-app-textMuted shrink-0">
+                                                <input type="number" min="100" step="100" value={activeChain.tempLayer.timeoutMs} onChange={(e) => updateChain((c) => { c.tempLayer.timeoutMs = Math.max(100, Number(e.target.value) || 1000); })} className="w-20 bg-app-card border border-app-borderHighlight rounded px-1.5 py-1.5 text-center outline-none" />
+                                                <span>ms timeout</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {advancedCount > 0 && (
+                                    <p className="text-[11px] text-app-textMuted italic">This chain also has {advancedCount} advanced setting{advancedCount > 1 ? 's' : ''} not shown here — they'll be kept exactly as they are.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 px-6 py-4 border-t border-app-borderHighlight shrink-0">
+                            <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-xs font-bold border border-app-borderHighlight text-app-textMuted hover:text-app-text hover:bg-app-card transition-all">Cancel</button>
+                            <button onClick={() => onSave(parsed)} className="px-5 py-2.5 rounded-xl text-xs font-bold btn-active shadow-lg border-none hover:-translate-y-px transition-all">Apply</button>
                         </div>
                     </div>
                 </div>
@@ -819,7 +995,7 @@ const { useState, useEffect, useMemo, useCallback, memo, useRef } = React;
             return <span className="flex items-start justify-center w-full"><span>{sym}</span>{isRight && <sup className="text-[7px] -ml-0.5 mt-0.5 opacity-70">R</sup>}</span>;
         };
 
-        const KeyComponent = memo(({ index, geo, binding, isSelected, isComboSelected, isZenMode, onSelect, osMode, onContextMenu, onKeyMouseDown, isDragSource, isDragOver, showLeds, isTouchpad, config, layerNames }) => {
+        const KeyComponent = memo(({ index, geo, binding, isSelected, isComboSelected, isZenMode, onSelect, osMode, onContextMenu, onKeyMouseDown, isDragSource, isDragOver, showLeds, isTouchpad, onOpenTouchpad, config, layerNames }) => {
             // In combo-editing (Zen) mode the canvas is for picking key POSITIONS, not reviewing
             // a layer's contents — so no key values, custom LED colors, or decorations are shown,
             // just the plain keyboard shape (still normally styled/visible, never dimmed/blacked
@@ -833,15 +1009,19 @@ const { useState, useEffect, useMemo, useCallback, memo, useRef } = React;
             if (hasCustomBg) { innerStyle.background = binding.decoration.background; innerStyle.borderColor = binding.decoration.background; innerStyle.color = getContrastColor(binding.decoration.background); }
 
             return (
-                <div className={`p-key-outer ${isSelected ? 'selected' : ''} ${isComboSelected ? 'combo-highlight' : ''} ${isDragOver ? 'drag-over' : ''} ${isTouchpad ? 'is-touchpad' : ''}`} style={outerStyle} data-key-idx={index} onClick={(e) => { e.stopPropagation(); if (!isTouchpad) onSelect(index); }} onContextMenu={(e) => { if (!isTouchpad) onContextMenu(e, index); }} onMouseDown={(e) => { if (!isTouchpad) onKeyMouseDown(e, index); }}>
+                <div className={`p-key-outer ${isSelected ? 'selected' : ''} ${isComboSelected ? 'combo-highlight' : ''} ${isDragOver ? 'drag-over' : ''} ${isTouchpad ? 'is-touchpad cursor-pointer' : ''}`} style={outerStyle} data-key-idx={index} title={isTouchpad ? `${TOUCHPAD_LABEL_BY_INDEX[index]} — click to configure` : undefined} onClick={(e) => { e.stopPropagation(); if (isTouchpad) onOpenTouchpad(index); else onSelect(index); }} onContextMenu={(e) => { if (isTouchpad) { e.preventDefault(); } else onContextMenu(e, index); }} onMouseDown={(e) => { if (!isTouchpad) onKeyMouseDown(e, index); }}>
                     <div className={`p-key ${hasCustomBg ? 'has-bg' : ''} ${isDragSource ? 'drag-source' : ''} ${isDragOver ? 'drag-over' : ''} ${geo.isRound ? 'is-round' : ''} ${isComboSelected ? 'combo-selected' : ''}`} style={innerStyle}>
-                        {!isTouchpad && labelHtml ? <div dangerouslySetInnerHTML={{ __html: labelHtml }} className="w-full h-full flex items-center justify-center relative overflow-hidden" /> : null}
+                        {isTouchpad ? (
+                            <div className="w-full h-full flex items-center justify-center text-app-textMuted/70 hover:text-app-accent transition-colors">
+                                <svg className="w-1/3 h-1/3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="14" rx="2" strokeWidth="1.6"></rect><path d="M3 13h18" strokeWidth="1.6" strokeLinecap="round"></path></svg>
+                            </div>
+                        ) : (labelHtml ? <div dangerouslySetInnerHTML={{ __html: labelHtml }} className="w-full h-full flex items-center justify-center relative overflow-hidden" /> : null)}
                     </div>
                 </div>
             );
         });
 
-const KeyboardContainer = ({ keyboardGeo, activeLayerBindings, selectedKey, onSelectKey, scale, setScale, osMode, onContextAction, clipboard, styleClipboard, onSwapKeys, showLeds, isGo60, config, isZenMode, selectedComboKeys, layerNames, stopZenMode }) => {
+const KeyboardContainer = ({ keyboardGeo, activeLayerBindings, selectedKey, onSelectKey, scale, setScale, osMode, onContextAction, clipboard, styleClipboard, onSwapKeys, showLeds, isGo60, config, isZenMode, selectedComboKeys, layerNames, stopZenMode, onOpenTouchpad }) => {
             const containerRef = useRef(null);
             const [autoFitScale, setAutoFitScale] = useState(1);
             const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -941,7 +1121,7 @@ const KeyboardContainer = ({ keyboardGeo, activeLayerBindings, selectedKey, onSe
                             const isSelected = !isZenMode && selectedKey === index;
                             const isComboSel = isZenMode && selectedComboKeys.includes(index);
                            
-                            return <KeyComponent key={`matrix-key-${index}`} index={index} geo={geo} binding={activeLayerBindings[index] || { value: '&none' }} isSelected={isSelected} isComboSelected={isComboSel} isZenMode={isZenMode} onSelect={onSelectKey} osMode={osMode} onContextMenu={openContextMenu} onKeyMouseDown={handleKeyMouseDown} isDragSource={dragSourceIdx === index} isDragOver={dragOverIdx === index} showLeds={showLeds} isTouchpad={isTouchpad} config={config} layerNames={layerNames} />;
+                            return <KeyComponent key={`matrix-key-${index}`} index={index} geo={geo} binding={activeLayerBindings[index] || { value: '&none' }} isSelected={isSelected} isComboSelected={isComboSel} isZenMode={isZenMode} onSelect={onSelectKey} osMode={osMode} onContextMenu={openContextMenu} onKeyMouseDown={handleKeyMouseDown} isDragSource={dragSourceIdx === index} isDragOver={dragOverIdx === index} showLeds={showLeds} isTouchpad={isTouchpad} onOpenTouchpad={onOpenTouchpad} config={config} layerNames={layerNames} />;
                         })}
                     </div>
                    
@@ -981,6 +1161,10 @@ const App = () => {
             const [showSettings, setShowSettings] = useState(false);
             const [showCapabilities, setShowCapabilities] = useState(false);
             const [showNewMenu, setShowNewMenu] = useState(false);
+            // Key index (60 or 61) of the touchpad currently open in TouchpadSettingsModal, or
+            // null when it's closed. A key index rather than a boolean since Go60 has two
+            // independent trackpads and the modal needs to know which one it's editing.
+            const [touchpadModalIndex, setTouchpadModalIndex] = useState(null);
 
             // Display name for the currently loaded layout (a filename or template name), shown
             // in the top bar next to the unsaved-changes dot — set whenever a layout is loaded.
@@ -2071,7 +2255,7 @@ const App = () => {
                                     </div>
                                 </div>
                             ) : (
-                                <KeyboardContainer keyboardGeo={keyboardGeo} activeLayerBindings={currentLayerBindings} selectedKey={selectedKey} onSelectKey={handleCanvasKeySelect} scale={canvasScale} setScale={setCanvasScale} osMode={effectiveOs} onContextAction={handleKeyContextAction} clipboard={clipboard} styleClipboard={styleClipboard} onSwapKeys={swapKeys} showLeds={showLeds} isGo60={isGo60} config={config} isZenMode={isZenMode} selectedComboKeys={editingComboIdx !== null ? (config.combos[editingComboIdx]?.keyPositions || config.combos[editingComboIdx]?.key_positions || []) : []} layerNames={layerNames} stopZenMode={() => setEditingComboIdx(null)} />
+                                <KeyboardContainer keyboardGeo={keyboardGeo} activeLayerBindings={currentLayerBindings} selectedKey={selectedKey} onSelectKey={handleCanvasKeySelect} scale={canvasScale} setScale={setCanvasScale} osMode={effectiveOs} onContextAction={handleKeyContextAction} clipboard={clipboard} styleClipboard={styleClipboard} onSwapKeys={swapKeys} showLeds={showLeds} isGo60={isGo60} config={config} isZenMode={isZenMode} selectedComboKeys={editingComboIdx !== null ? (config.combos[editingComboIdx]?.keyPositions || config.combos[editingComboIdx]?.key_positions || []) : []} layerNames={layerNames} stopZenMode={() => setEditingComboIdx(null)} onOpenTouchpad={setTouchpadModalIndex} />
                             )}
                         </section>
 
@@ -2452,6 +2636,17 @@ const App = () => {
                         engineStatus={jqEngineStatus}
                         onRetryEngine={ensureJqEngineLoaded}
                     />
+
+                    {touchpadModalIndex !== null && (
+                        <TouchpadSettingsModal
+                            key={touchpadModalIndex}
+                            index={touchpadModalIndex}
+                            config={config}
+                            layerNames={layerNames}
+                            onClose={() => setTouchpadModalIndex(null)}
+                            onSave={(parsed) => { pushHistory(setTouchpadConfig(config, touchpadModalIndex, parsed)); showToast('Touchpad settings updated'); setTouchpadModalIndex(null); }}
+                        />
+                    )}
 
                     <ConfirmDialog state={confirmState} onChoice={handleConfirmChoice} />
 

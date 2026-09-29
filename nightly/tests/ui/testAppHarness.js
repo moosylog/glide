@@ -8,7 +8,7 @@ import ReactDOM from 'react-dom/client';
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const CORE_SCRIPT_PATHS = [
-  'core/zmk/naming.js', 'core/zmk/layerPointers.js', 'core/zmk/combos.js',
+  'core/zmk/naming.js', 'core/zmk/layerPointers.js', 'core/zmk/combos.js', 'core/zmk/inputProcessors.js',
   'core/keycodes/zmkMap.js', 'core/keycodes/modChain.js',
   'core/geometry/convertGeo.js', 'core/geometry/glove80.js', 'core/geometry/go60.js',
   'core/gc.js', 'core/usage.js', 'core/slots.js', 'core/describe.js', 'core/layerShift.js',
