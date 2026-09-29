@@ -77,6 +77,38 @@ describe('shiftLayerPointers — REGRESSION: layer index nested inside a custom 
   });
 });
 
+describe('shiftLayerPointers — combo.layers: [-1] ("applies to all layers") sentinel', () => {
+  it('leaves a [-1] combo untouched on layer delete (it is not tied to any specific index)', () => {
+    const config = { layers: [[], [], []], combos: [{ layers: [-1] }] };
+    shiftLayerPointers(config, 'delete', 1);
+    expect(config.combos[0].layers).toEqual([-1]);
+  });
+
+  it('leaves a [-1] combo untouched on layer insert', () => {
+    const config = { layers: [[], []], combos: [{ layers: [-1] }] };
+    shiftLayerPointers(config, 'insert', 0);
+    expect(config.combos[0].layers).toEqual([-1]);
+  });
+
+  it('leaves a [-1] combo untouched on layer move', () => {
+    const config = { layers: [[], [], []], combos: [{ layers: [-1] }] };
+    shiftLayerPointers(config, 'move', 0, 2);
+    expect(config.combos[0].layers).toEqual([-1]);
+  });
+
+  it('still correctly remaps a combo restricted to specific layers (the [-1] sentinel does not affect this path)', () => {
+    const config = { layers: [[], [], []], combos: [{ layers: [0, 2] }] };
+    shiftLayerPointers(config, 'delete', 1);
+    expect(config.combos[0].layers).toEqual([0, 1]); // layer 2 shifted down to 1; layer 0 untouched
+  });
+
+  it('still drops a specific-layer reference whose target layer was deleted', () => {
+    const config = { layers: [[], [], []], combos: [{ layers: [1, 2] }] };
+    shiftLayerPointers(config, 'delete', 1);
+    expect(config.combos[0].layers).toEqual([1]); // layer 1 (deleted) dropped, layer 2 shifted to 1
+  });
+});
+
 describe('shiftLayerPointers — real fixture regression (Glorious Engrammer v52b)', () => {
   it('correctly remaps all 7 real thumb/space keys that wrap a layer-pointer via a hand-authored holdTap, with zero false positives', () => {
     const original = loadFixture('engrammer.json');

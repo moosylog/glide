@@ -75,6 +75,11 @@
                 config.combos.forEach(combo => {
                     remapNestedBehavior(combo.binding);
                     if (!combo.layers) return;
+                    // layers: [-1] means "applies to all layers" — an invariant, independent of
+                    // which specific layers exist, so it must survive insert/delete/move untouched.
+                    // (Without this check it would collide with remapVal's unrelated "-1 = this
+                    // reference was deleted" meaning below and get silently stripped out.)
+                    if (combo.layers.includes(-1)) { combo.layers = [-1]; return; }
                     combo.layers = [...new Set(combo.layers.map(remapVal).filter(v => v !== -1))];
                 });
             }
