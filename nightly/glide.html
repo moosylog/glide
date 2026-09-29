@@ -1721,7 +1721,17 @@ const KeyboardContainer = ({ keyboardGeo, activeLayerBindings, selectedKey, onSe
             // mouse, touch and pen alike, which is what actually makes panning/drag-to-swap work
             // on a phone or tablet — plain mousedown/mousemove/mouseup never fire for touch input.
             const handlePointerDown = (e) => {
-                if (e.target.closest('.p-key')) return;
+                // Excludes actual key tiles (so drag-to-swap/long-press on a key still works,
+                // handled by handleKeyMouseDown instead) AND any button floating over the canvas
+                // (zoom controls, the clipboard/paste dock, "Done Editing" in Focus Mode, …).
+                // Without the button exclusion, setPointerCapture below grabs the pointer for the
+                // whole canvas the instant ANY of those buttons is pressed, and the browser then
+                // retargets the follow-up pointerup/click to the captor instead of the button —
+                // so the click event never reaches the button's own onClick at all. Confirmed via
+                // a real Chromium session (jsdom doesn't reproduce pointer capture retargeting):
+                // a real mouse click on the zoom +/- buttons logged pointerdown/pointerup/click
+                // all targeting <html>, not the button, and the displayed percentage never moved.
+                if (e.target.closest('.p-key') || e.target.closest('button')) return;
                 e.currentTarget.setPointerCapture?.(e.pointerId);
                 setIsDragging(true); setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
             };
