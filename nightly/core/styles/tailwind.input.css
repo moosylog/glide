@@ -1,0 +1,6 @@
+/* core/styles/tailwind.input.css -- the source Tailwind compiles from. Not loaded by GLIDE
+   directly; `npm run build:css` reads this and tailwind.config.js and writes the real,
+   browser-loaded stylesheet to core/styles/tailwind.generated.css. See core/styles/README.md. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
