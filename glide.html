@@ -4,7 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GLIDE — Graphical Layout & Intent Definition Editor</title>
-   
+
+    <!-- Favicon: an orange "G" monogram on a dark keycap-style rounded square. assets/favicon.svg
+         is the source (edit that, not the generated files below it) -- the SVG favicon covers
+         modern browsers at any resolution, favicon.ico is the classic fallback every browser and
+         OS bookmark UI still checks by convention, and apple-touch-icon.png is what iOS/iPadOS
+         uses for a home-screen/bookmark icon. Regenerate all of them from assets/favicon.svg with
+         `npm run build:favicons` after editing the source. -->
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
+    <link rel="icon" href="favicon.ico">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+
     <!-- Production builds -- the development builds this shipped with add React's extra runtime
          checks/warnings and a much bigger payload, neither of which a released app needs; see
          ARCHITECTURE.md's "Startup performance" note for the full before/after.
