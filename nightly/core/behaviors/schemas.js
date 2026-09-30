@@ -70,6 +70,14 @@
                     description: 'Evaluate the hold decision when the key is released rather than while held.',
                 },
                 {
+                    key: 'holdWhileUndecided', label: 'Hold While Undecided', type: 'boolean', default: false, widget: 'toggle', advanced: true,
+                    description: 'Activate the hold action while the decision is pending.',
+                },
+                {
+                    key: 'holdWhileUndecidedLinger', label: 'Hold While Undecided (Linger)', type: 'boolean', default: false, widget: 'toggle', advanced: true,
+                    description: 'Keep the hold action active until the tap action ends.',
+                },
+                {
                     // Not `advanced` — this was always visible in the original hand-built panel
                     // (a key part of tuning shared hold-taps), so hiding it behind the Advanced
                     // accordion now would be a real UX regression, not just a cosmetic reshuffle.

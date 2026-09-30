@@ -6,11 +6,15 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "build:css": "tailwindcss -i core/styles/tailwind.input.css -o core/styles/tailwind.generated.css --minify -c tailwind.config.js"
+    "test:e2e": "playwright test",
+    "build:css": "tailwindcss -i core/styles/tailwind.input.css -o core/styles/tailwind.generated.css --minify -c tailwind.config.js",
+    "build:bundle": "node scripts/bundleSingleFile.mjs"
   },
   "devDependencies": {
     "@babel/core": "^8.0.6",
     "@babel/preset-react": "^8.0.1",
+    "@babel/standalone": "^7.29.9",
+    "@playwright/test": "^1.56.0",
     "jq-web": "^0.5.1",
     "jsdom": "^30.1.1",
     "react": "^18.3.1",

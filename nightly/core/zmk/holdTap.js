@@ -19,10 +19,23 @@
 //     same way. `retroTap` never appears in the real data (ZMK's own default is false), but is
 //     still exposed as an editable boolean since it's a documented, real behavior property.
 //   - Real records carry `holdTriggerKeyPositions` (a per-key physical-position allowlist,
-//     sometimes 40+ entries) that this module has no UI-facing editor for. `updateHoldTap`
-//     preserves it (and any other field this module doesn't manage) by merging onto the existing
-//     record rather than rebuilding it field-by-field from scratch — editing a hold-tap's tapping
-//     term must never silently drop its key-position list.
+//     sometimes 40+ entries). It IS editable — through the per-key inspector's inline hold-tap
+//     editor (DynamicBehaviorForm, core/behaviors/schemas.js's `keyboard_picker` widget) — but
+//     the separate, standalone Behavior Library HoldTapBuilderModal (ui/builders.js) had no field
+//     for it at all, a real gap between the two editors for the same data found by auditing this
+//     module against ZMK's actual property list rather than just this file's own tests. Both
+//     normalizeHoldTapFields and updateHoldTap below now manage it explicitly (default `[]`, not
+//     silently dropped) so HoldTapBuilderModal can gain the same field without a second, divergent
+//     read/write path.
+//
+// `holdWhileUndecided`/`holdWhileUndecidedLinger` (ZMK device-tree `hold-while-undecided`/
+// `hold-while-undecided-linger`): two more real, documented hold-tap properties that had no
+// representation anywhere in GLIDE at all — not in this module, not in core/behaviors/schemas.js,
+// not in either editor UI — until this same audit. `hold-while-undecided` sends the hold binding's
+// key-down the moment the hold-tap is triggered, while ZMK is still deciding tap vs. hold (instead
+// of waiting for the decision); `hold-while-undecided-linger` keeps that hold binding active until
+// the tap binding's own key-up, rather than releasing it as soon as the decision resolves. Same
+// undefined-means-"use the firmware default" convention as every other optional boolean here.
 //
 // Classic script (no bundler yet) — attaches its exports to window.GlideCore.
 (function () {
@@ -43,6 +56,9 @@
             requirePriorIdleMs: typeof ht?.requirePriorIdleMs === 'number' ? ht.requirePriorIdleMs : undefined,
             holdTriggerOnRelease: typeof ht?.holdTriggerOnRelease === 'boolean' ? ht.holdTriggerOnRelease : undefined,
             retroTap: typeof ht?.retroTap === 'boolean' ? ht.retroTap : undefined,
+            holdWhileUndecided: typeof ht?.holdWhileUndecided === 'boolean' ? ht.holdWhileUndecided : undefined,
+            holdWhileUndecidedLinger: typeof ht?.holdWhileUndecidedLinger === 'boolean' ? ht.holdWhileUndecidedLinger : undefined,
+            holdTriggerKeyPositions: Array.isArray(ht?.holdTriggerKeyPositions) ? [...ht.holdTriggerKeyPositions] : [],
             bindings: Array.isArray(ht?.bindings) && ht.bindings.length >= 2 ? [ht.bindings[0], ht.bindings[1]] : ['&kp', '&kp'],
         };
     }
@@ -111,9 +127,11 @@
         ['tappingTermMs', 'quickTapMs', 'requirePriorIdleMs'].forEach((k) => {
             if (typeof parsed[k] === 'number') built[k] = parsed[k]; else delete built[k];
         });
-        ['holdTriggerOnRelease', 'retroTap'].forEach((k) => {
+        ['holdTriggerOnRelease', 'retroTap', 'holdWhileUndecided', 'holdWhileUndecidedLinger'].forEach((k) => {
             if (typeof parsed[k] === 'boolean') built[k] = parsed[k]; else delete built[k];
         });
+        if (Array.isArray(parsed.holdTriggerKeyPositions) && parsed.holdTriggerKeyPositions.length > 0) built.holdTriggerKeyPositions = parsed.holdTriggerKeyPositions;
+        else delete built.holdTriggerKeyPositions;
         if (idx >= 0) next.holdTaps[idx] = built; else { if (!next.holdTaps) next.holdTaps = []; next.holdTaps.push(built); }
         return next;
     }
