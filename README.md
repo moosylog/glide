@@ -1,24 +1,31 @@
 # GLIDE
 
 **G**raphical **L**ayout & **I**ntent **D**efinition **E**ditor — a visual keymap editor for
-MoErgo's ZMK-based keyboards ([Glove80](https://www.moergo.com/) and Go60), built as a single
-self-contained HTML file.
+MoErgo's ZMK-based keyboards ([Glove80](https://www.moergo.com/) and Go60).
 
 Load your keymap JSON (exported from [MoErgo's Layout Editor](https://my.glove80.com)), edit it
 visually — keys, layers, combos, macros, hold-taps — and export a file that drops straight back
-into MoErgo's importer. No install, no account, no server: open `index.html` in a browser and
-you're editing.
+into MoErgo's importer. No install, no account, nothing to build.
 
 ## Quick start
 
-Start [[`index.html`](./index.html](https://moosylog.github.io/glide/)) ](https://moosylog.github.io/glide/)from any modern browser — that's the whole app, one
-file, nothing to install. Or clone the repo and open it locally:
+Just use it: **[moosylog.github.io/glide](https://moosylog.github.io/glide/)** — that's the live
+app, served straight from this repo's source, no build step in between.
+
+To run it yourself, clone the repo and serve it with any static file server (a plain
+`file://` double-click won't load `core/*.js`/`ui/*.js` — browsers block that over `file://`,
+but not over `http(s)`, which is exactly how GitHub Pages serves it):
 
 ```bash
 git clone https://github.com/moosylog/glide.git
 cd glide
-open index.html   # or just double-click it
+npx serve .
+# or: python3 -m http.server
 ```
+
+Want one portable `.html` file you can download and open offline with no server at all? Run
+`npm run build:bundle` (see [Development](#development)) — it inlines everything into a single
+file for exactly that case.
 
 ## Features
 
@@ -40,29 +47,38 @@ open index.html   # or just double-click it
 ## Project structure
 
 ```
-index.html          # the shippable app — a single self-contained file, zero dependencies
-glide.html           # the source template: React UI + <script src="..."> tags into core/ and ui/
+glide.html           # the real source: React UI + <script src="..."> tags into core/ and ui/
+index.html           # an exact copy of glide.html, kept in sync automatically (see below) —
+                      # this is the name GitHub Pages requires at the repo root to serve it
 core/                # framework-free domain logic (ZMK bindings, geometry, schemas, capabilities/Flows engine)
 ui/                  # React components (sidebar, canvas, inspector, modals, top bar)
 tests/               # vitest suite — core/ unit tests (Node) + ui/ integration tests (jsdom)
-scripts/             # build tooling (bundleSingleFile.mjs assembles glide.html + core/ + ui/ -> index.html)
+scripts/             # build tooling (bundleSingleFile.mjs inlines everything into one portable file, on demand)
+.github/workflows/    # auto-syncs index.html from glide.html on every push (see below)
 ARCHITECTURE.md       # the modularization plan and module responsibilities
 DEVLOG.md             # a running log of notable fixes and design decisions, oldest first
 ```
+
+`glide.html` and `index.html` are the same app — edit `glide.html`; a GitHub Actions workflow
+(`.github/workflows/sync-pages.yml`) copies it to `index.html` and commits that automatically on
+every push to `main`, so the live Pages site always matches the source with no manual step and
+no build in between.
 
 ## Development
 
 ```bash
 npm install
 npm test               # runs the full vitest suite (core/ + ui/)
-npm run build:bundle    # rebuilds index.html from glide.html + core/ + ui/
+npm run build:bundle    # produces a single portable dist/glide.html for offline/no-server use
 npm run build:css       # regenerates core/styles/tailwind.generated.css
 ```
 
 `glide.html` is the file to edit — it pulls in `core/*.js` and `ui/*.js` via ordinary
-`<script src>` tags (no bundler at dev time). `npm run build:bundle` inlines all of that into
-the single `index.html` file that actually ships. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for
-why it's structured this way, and [`DEVLOG.md`](./DEVLOG.md) for the history of how it got here.
+`<script src>` tags, which is all GitHub Pages (or any static server) needs; no build step is
+part of deploying it. `npm run build:bundle` is only for producing a standalone, single-file
+copy for offline use — it's not used by the live site. See [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+for why the source is structured this way, and [`DEVLOG.md`](./DEVLOG.md) for the history of how
+it got here.
 
 ## Status
 

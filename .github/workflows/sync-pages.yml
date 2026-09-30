@@ -1,0 +1,36 @@
+name: Sync index.html for GitHub Pages
+
+# glide.html is the real, edited source. GitHub Pages needs a file literally named
+# index.html to serve at the repo's root URL (https://moosylog.github.io/glide/), so this
+# keeps index.html as an exact, auto-committed copy of glide.html — nobody has to remember
+# to run `cp glide.html index.html` by hand before pushing, and Pages always reflects
+# whatever's actually in glide.html.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "glide.html"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Copy glide.html to index.html if it changed
+        run: |
+          if ! cmp -s glide.html index.html; then
+            cp glide.html index.html
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add index.html
+            git commit -m "Sync index.html with glide.html [skip ci]"
+            git push
+          else
+            echo "index.html already matches glide.html — nothing to do."
+          fi
