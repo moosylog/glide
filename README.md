@@ -11,7 +11,7 @@ you're editing.
 
 ## Quick start
 
-Grab [`index.html`](./index.html) and open it in any modern browser — that's the whole app, one
+Start [[`index.html`](./index.html](https://moosylog.github.io/glide/)) from any modern browser — that's the whole app, one
 file, nothing to install. Or clone the repo and open it locally:
 
 ```bash
