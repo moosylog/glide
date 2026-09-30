@@ -41,21 +41,32 @@ describe('Behavior Library nav section', () => {
     expect(navButton('Macros')).toBeFalsy();
   });
 
-  it('going back to Layers does not collapse the section once it has been opened', async () => {
+  it('clicking Layers or Combos closes the Behavior Library section, even if it was manually opened', async () => {
+    // Previously this section stayed expanded once opened, on the theory that a user switching
+    // between library tabs shouldn't have to re-expand it each time. In practice that meant
+    // clicking away to Layers/Combos left five behavior-definition tabs cluttering the nav for no
+    // reason — the section is for *editing behavior definitions*, a separate task from browsing
+    // layers or combos, so leaving Layers/Combos should close it back up, matching how it behaves
+    // everywhere else (an accordion section that yields the space back when you navigate away).
     await click(libraryToggle());
     await click(navButton('Macros'));
     await click(navButton('Layers'));
-    // Section should still be expanded since the user opened it, even though Layers is now active.
-    expect(navButton('Macros')).toBeTruthy();
+    expect(navButton('Macros')).toBeFalsy();
+
+    await click(libraryToggle());
+    await click(navButton('Sticky'));
+    await click(navButton('Combos'));
+    expect(navButton('Sticky')).toBeFalsy();
   });
 
   it('does not collide with the pre-existing per-key "Advanced Behaviors" inspector tab', () => {
-    // That tab is a plain icon button with a title attribute, no visible text — so it never
-    // matches the visible-text lookups above, and this section's own toggle never matches its
-    // title-based lookup either.
+    // That tab now shows a visible label too (UX pass: the inspector's tab switcher grew labels
+    // under its icons, see ui/inspector.js) — but its label is the full "Advanced Behaviors",
+    // which never matches this section's own text-based lookup for "Behavior Library" above, so
+    // the two still can't be confused for one another.
     const advancedInspectorTab = qa('button[title="Advanced Behaviors"]')[0];
     expect(advancedInspectorTab).toBeTruthy();
-    expect(advancedInspectorTab.textContent.trim()).toBe('');
+    expect(advancedInspectorTab.textContent.trim()).toBe('Advanced Behaviors');
     expect(libraryToggle()).not.toBe(advancedInspectorTab);
   });
 });

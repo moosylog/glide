@@ -30,6 +30,7 @@ describe('normalizeHoldTapFields', () => {
         expect(parsed).toEqual({
             description: '', flavor: 'tap-preferred', tappingTermMs: 100, quickTapMs: 100,
             requirePriorIdleMs: undefined, holdTriggerOnRelease: undefined, retroTap: undefined,
+            holdWhileUndecided: undefined, holdWhileUndecidedLinger: undefined, holdTriggerKeyPositions: [],
             bindings: ['&kp', '&none'],
         });
     });
@@ -43,12 +44,16 @@ describe('normalizeHoldTapFields', () => {
         expect(parsed.requirePriorIdleMs).toBe(100);
         expect(parsed.holdTriggerOnRelease).toBe(true);
         expect(parsed.bindings).toEqual(['&kp', '&HRM_left_index_tap_v1B_TKZ']);
+        // The real record for this key has a real holdTriggerKeyPositions allowlist — proves
+        // normalizeHoldTapFields doesn't drop it (it used to have no representation at all here).
+        expect(parsed.holdTriggerKeyPositions.length).toBeGreaterThan(0);
     });
 
     it('falls back to a sane default for a missing/malformed record', () => {
         expect(normalizeHoldTapFields(undefined)).toEqual({
             description: '', flavor: 'tap-preferred', tappingTermMs: undefined, quickTapMs: undefined,
             requirePriorIdleMs: undefined, holdTriggerOnRelease: undefined, retroTap: undefined,
+            holdWhileUndecided: undefined, holdWhileUndecidedLinger: undefined, holdTriggerKeyPositions: [],
             bindings: ['&kp', '&kp'],
         });
     });
@@ -142,5 +147,25 @@ describe('create/update/rename/delete/clone round-trip', () => {
         const clone = config.holdTaps.find((h) => h.name === name);
         const original = tynstar.holdTaps.find((h) => h.name === '&strong');
         expect(clone).toEqual({ ...original, name: '&strong_copy' });
+    });
+
+    // holdWhileUndecided/holdWhileUndecidedLinger and holdTriggerKeyPositions had no editable
+    // path anywhere in GLIDE before this audit (see this file's own header) — proving the write
+    // side here, not just that normalizeHoldTapFields reads them back.
+    it('writes and clears holdWhileUndecided/holdWhileUndecidedLinger like every other optional boolean', () => {
+        const { config, name } = createHoldTap(tynstar, 'ht_undecided');
+        const withFlags = updateHoldTap(config, name, { description: '', flavor: 'balanced', bindings: ['&kp', '&kp'], holdWhileUndecided: true, holdWhileUndecidedLinger: true });
+        expect(withFlags.holdTaps.find((h) => h.name === name).holdWhileUndecided).toBe(true);
+        expect(withFlags.holdTaps.find((h) => h.name === name).holdWhileUndecidedLinger).toBe(true);
+
+        const cleared = updateHoldTap(withFlags, name, { description: '', flavor: 'balanced', bindings: ['&kp', '&kp'] });
+        expect(cleared.holdTaps.find((h) => h.name === name).holdWhileUndecided).toBeUndefined();
+        expect(cleared.holdTaps.find((h) => h.name === name).holdWhileUndecidedLinger).toBeUndefined();
+    });
+
+    it('can set holdTriggerKeyPositions on a hold-tap that never had one (the previously-missing write path)', () => {
+        const { config, name } = createHoldTap(tynstar, 'ht_keys');
+        const withKeys = updateHoldTap(config, name, { description: '', flavor: 'tap-preferred', bindings: ['&kp', '&kp'], holdTriggerKeyPositions: [3, 7, 12] });
+        expect(withKeys.holdTaps.find((h) => h.name === name).holdTriggerKeyPositions).toEqual([3, 7, 12]);
     });
 });

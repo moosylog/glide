@@ -19,12 +19,32 @@ const CORE_SCRIPT_PATHS = [
   'core/capabilities/builtinCatalog.js',
 ];
 
+// GLIDE UI components (ui/*.js — see ARCHITECTURE.md's Stage 1 modularization entry). Mirrors
+// glide.html's own <script> tags: shared.js is plain JS, the rest are JSX and need Babel, and
+// all four must load in this exact dependency order (each file's own header comment says what
+// it needs from the one before it) — same as the browser loading them via Babel Standalone.
+const UI_PLAIN_SCRIPT_PATHS = ['ui/hooks.js', 'ui/shared.js'];
+const UI_BABEL_SCRIPT_PATHS = ['ui/topBar.js', 'ui/canvas.js', 'ui/sidebar.js', 'ui/sharedForms.js', 'ui/modals.js', 'ui/builders.js', 'ui/inspector.js'];
+
+let compiledUiCache = null;
+function getCompiledUiScripts() {
+  if (compiledUiCache) return compiledUiCache;
+  compiledUiCache = UI_BABEL_SCRIPT_PATHS.map((p) => {
+    const src = readFileSync(path.join(repoRoot, p), 'utf8');
+    const { code } = babel.transformSync(src, {
+      presets: [['@babel/preset-react', { runtime: 'classic' }]],
+    });
+    return code;
+  });
+  return compiledUiCache;
+}
+
 let compiledAppCache = null;
 function getCompiledApp() {
   if (compiledAppCache) return compiledAppCache;
   const html = readFileSync(path.join(repoRoot, 'glide.html'), 'utf8');
   const startTag = '<script type="text/babel">';
-  const start = html.indexOf(startTag) + startTag.length;
+  const start = html.lastIndexOf(startTag) + startTag.length;
   const end = html.indexOf('</script>', start);
   const code = html.slice(start, end);
   const { code: compiled } = babel.transformSync(code, {
@@ -63,6 +83,14 @@ export async function mountGlideApp() {
     new Function(src).call(window);
   }
 
+  for (const p of UI_PLAIN_SCRIPT_PATHS) {
+    const src = readFileSync(path.join(repoRoot, p), 'utf8');
+    new Function(src).call(window);
+  }
+  for (const compiled of getCompiledUiScripts()) {
+    new Function(compiled).call(window);
+  }
+
   const compiled = getCompiledApp();
   new Function(compiled).call(window);
 
@@ -81,6 +109,24 @@ export const keyEl = (idx) => qa('[data-key-idx]').find((el) => el.dataset.keyId
 export async function click(el) {
   if (!el) throw new Error('click(): target element was null — check the selector that produced it');
   el.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await delay();
+}
+
+/**
+ * Simulates hovering onto/off of `el` — for the reverse-selection highlight (UX pass:
+ * hoveredBehaviorName/hoveredComboIdx in glide.html, read by ui/sidebar.js's row onMouseEnter/
+ * onMouseLeave). React's onMouseEnter/onMouseLeave are derived from native mouseover/mouseout
+ * bubbling, so dispatching those (rather than nonexistent-in-React 'mouseenter'/'mouseleave')
+ * is what actually reaches the handler in this jsdom-based harness.
+ */
+export async function hoverOn(el) {
+  if (!el) throw new Error('hoverOn(): target element was null — check the selector that produced it');
+  el.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true, cancelable: true }));
+  await delay();
+}
+export async function hoverOff(el) {
+  if (!el) throw new Error('hoverOff(): target element was null — check the selector that produced it');
+  el.dispatchEvent(new window.MouseEvent('mouseout', { bubbles: true, cancelable: true }));
   await delay();
 }
 

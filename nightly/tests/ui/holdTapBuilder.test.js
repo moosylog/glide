@@ -87,4 +87,47 @@ describe('Hold-Tap Builder', () => {
     await click(Array.from(qa('button')).find((b) => b.textContent.trim() === 'Delete Anyway'));
     expect(document.body.textContent).toContain('Hold-tap deleted');
   });
+
+  // Real audit finding: holdTriggerKeyPositions was editable through the per-key inspector's
+  // inline hold-tap editor but had no field at all in this standalone modal — a real gap between
+  // two editors for the same underlying data. hold-while-undecided/hold-while-undecided-linger
+  // had no UI anywhere in GLIDE until this pass. See core/zmk/holdTap.js's header.
+  it('shows the Hold Trigger Keys mini-keyboard, always visible (not under Advanced)', async () => {
+    await openHoldTapsTab();
+    await click(rowFor('strong'));
+    expect(modal().textContent).toContain('Hold Trigger Keys');
+    // Clicking a key in the mini-map toggles it into holdTriggerKeyPositions and persists on Apply.
+    const miniMapKey = modal().querySelector('.divide-y')?.previousElementSibling?.querySelector('[style*="position: absolute"]')
+      || Array.from(modal().querySelectorAll('div')).find((el) => el.getAttribute('style')?.includes('position: absolute'));
+    expect(miniMapKey).toBeTruthy();
+  });
+
+  it('Hold While Undecided / Hold While Undecided (Linger) live under an Advanced disclosure and persist on Apply', async () => {
+    await openHoldTapsTab();
+    await click(rowFor('strong'));
+    expect(modal().textContent).not.toContain('Hold While Undecided');
+
+    await click(mByText('button', '▸ Advanced'));
+    expect(modal().textContent).toContain('Hold While Undecided');
+    expect(modal().textContent).toContain('Hold While Undecided (Linger)');
+
+    const undecidedToggle = Array.from(modal().querySelectorAll('input[type="checkbox"]')).find((input, i, all) => {
+      // Toggle's own label sits in a sibling span, not an aria-label — find by the row's text.
+      const row = input.closest('label');
+      return row?.textContent.includes('Hold While Undecided') && !row.textContent.includes('Linger');
+    });
+    expect(undecidedToggle).toBeTruthy();
+    undecidedToggle.click();
+    await click(mByText('button', 'Apply'));
+    expect(document.body.textContent).toContain('Hold-tap saved');
+
+    await openHoldTapsTab();
+    await click(rowFor('strong'));
+    await click(mByText('button', '▸ Advanced'));
+    const reopened = Array.from(modal().querySelectorAll('input[type="checkbox"]')).find((input) => {
+      const row = input.closest('label');
+      return row?.textContent.includes('Hold While Undecided') && !row.textContent.includes('Linger');
+    });
+    expect(reopened.checked).toBe(true);
+  });
 });

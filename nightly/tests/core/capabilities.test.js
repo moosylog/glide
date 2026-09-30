@@ -256,6 +256,38 @@ describe('capabilities/builtinCatalog — every Flows Automation shipped WITH GL
         }
     }, 20000);
 
+    // Real bug found auditing this script: it built the new Gaming layer with a literal
+    // range(60), two shorter than every other layer in a real 62-position GLIDE Go60 layout —
+    // silently inconsistent layer lengths that glove80_gaming's equivalent script (range(80),
+    // matching Glove80's real 80) never had. Fixed by sizing off the real .layers[0] length
+    // instead of a literal 60.
+    it('gaming60 adds a Gaming layer the same length as every other layer on a real 62-key go60 layout', async () => {
+        const { entries } = parseCatalog(BUILTIN_FLOWS_CATALOG);
+        const entry = entries.find((e) => e.uid === 'gaming60');
+        const config = { keyboard: 'go60', layer_names: ['Base'], layers: [Array.from({ length: 62 }, () => ({ value: '&kp', params: [{ value: 'A', params: [] }] }))] };
+        const { config: result, errors } = await applyFlow(config, entry, {});
+        expect(errors).toEqual([]);
+        expect(result.layers).toHaveLength(2);
+        expect(result.layers[1]).toHaveLength(62);
+        expect(result.layers[1][0]).toEqual({ value: '&kp', params: [{ value: 'ESC', params: [] }] });
+    });
+
+    // Same class of bug as gaming60 above, found in the same audit: the go60 branch of this
+    // script's hardware-config object hardcoded key_count: 60 for the new Mouse/MouseSlow/
+    // MouseFast/MouseWarp layers it builds, two short of a real 62-position Go60 layout. Unlike
+    // mirror_keyboard_halves/colors_createRGBscheme this one is NOT scoped away from go60 (its
+    // manifest already lists it), so this was a live bug affecting every real Go60 apply, not
+    // just a theoretical one. Fixed by reading the real .layers[0] length instead.
+    it('mouse_emulation_universal builds its new layers the same length as the rest, on a real 62-key go60 layout', async () => {
+        const { entries } = parseCatalog(BUILTIN_FLOWS_CATALOG);
+        const entry = entries.find((e) => e.uid === 'mouse_emulation_universal');
+        const config = { keyboard: 'go60', layer_names: ['Base'], layers: [Array.from({ length: 62 }, () => ({ value: '&kp', params: [{ value: 'A', params: [] }] }))] };
+        const { config: result, errors } = await applyFlow(config, entry, {});
+        expect(errors).toEqual([]);
+        expect(result.layer_names).toEqual(['Base', 'Mouse', 'MouseSlow', 'MouseFast', 'MouseWarp']);
+        result.layers.forEach((l) => expect(l).toHaveLength(62));
+    });
+
     it('colors_createRGBscheme is scoped to glove80 only, since its real script assumes exactly 60 keys on go60', () => {
         const { entries } = parseCatalog(BUILTIN_FLOWS_CATALOG);
         const entry = entries.find((e) => e.uid === 'colors_createRGBscheme');
@@ -283,10 +315,33 @@ describe('capabilities/builtinCatalog — every Flows Automation shipped WITH GL
         expect(uids).not.toContain('hrm_bil_dynamic'); // upstream's own script is truncated
     });
 
-    it('mirror_keyboard_halves is scoped to glove80 only, since its real script assumes exactly 60 keys on go60', () => {
+    // mirror_keyboard_halves had the identical exact-60-keys assumption colors_createRGBscheme
+    // still has, but unlike that one it's a pure position swap with no physical-layout string to
+    // guess at, so it's fixed and re-enabled for go60 here (see builtinCatalog.js's header) --
+    // the general "every entry actually runs" test above already exercises it against the real
+    // 62-key go60Config; this proves the two trackpad-listener slots specifically survive
+    // untouched rather than getting silently dropped or corrupted by the mirror.
+    it('mirror_keyboard_halves works on a real 62-key go60 layout, leaving the two touchpad slots untouched', async () => {
         const { entries } = parseCatalog(BUILTIN_FLOWS_CATALOG);
         const entry = entries.find((e) => e.uid === 'mirror_keyboard_halves');
-        expect(entry.manifest.keyboards).toEqual(['glove80']);
-        expect(isFlowCompatible(entry, { keyboard: 'go60' })).toBe(false);
+        expect(entry.manifest.keyboards).toEqual(['glove80', 'go60']);
+        expect(isFlowCompatible(entry, { keyboard: 'go60' })).toBe(true);
+
+        const config = {
+            keyboard: 'go60',
+            layers: [Array.from({ length: 62 }, (_, i) => ({ value: '&kp', params: [{ value: `K${i}`, params: [] }] }))],
+        };
+        const before5 = JSON.stringify(config.layers[0][5]);
+        const before6 = JSON.stringify(config.layers[0][6]);
+        const before60 = JSON.stringify(config.layers[0][60]);
+        const before61 = JSON.stringify(config.layers[0][61]);
+
+        const { config: result, errors } = await applyFlow(config, entry, { layer_idx: '0', mirror_style: 'symmetric', exclude_thumbs: 'no' });
+        expect(errors).toEqual([]);
+        expect(result.layers[0]).toHaveLength(62);
+        expect(JSON.stringify(result.layers[0][5])).toBe(before6); // key 5 <-> key 6 under the symmetric mapping
+        expect(JSON.stringify(result.layers[0][6])).toBe(before5);
+        expect(JSON.stringify(result.layers[0][60])).toBe(before60); // touchpad slot, left alone
+        expect(JSON.stringify(result.layers[0][61])).toBe(before61); // touchpad slot, left alone
     });
 });

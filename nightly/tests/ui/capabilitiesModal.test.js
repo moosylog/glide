@@ -68,11 +68,56 @@ describe('Flows Automations modal', () => {
         expect(byText('button', 'Apply to Layout')).toBeTruthy();
     });
 
+    // Real gap found auditing this modal: `description` fields carry real markdown (bold,
+    // inline code, links, bullet lists) but used to render inside a plain whitespace-pre-wrap
+    // <p>, so a user saw literal asterisks/backticks instead of formatted text. Proves
+    // renderFlowMarkdown (ui/shared.js) is actually wired into the detail view, not just unit-
+    // tested in isolation.
+    it('renders a description\'s markdown as real elements, not literal asterisks/backticks', async () => {
+        await openFlowsAutomations();
+        await clickCategory('Decorations & RGB');
+        await clickCapability('Magic Key Stylizer');
+        const detail = qa('p, li').find((el) => el.textContent.includes('same look'));
+        expect(detail).toBeTruthy();
+        // The inline code span for `&magic` is a real <code> element...
+        expect(detail.querySelector('code')?.textContent).toBe('&magic');
+        // ...and the bold lead-in on the bullet list is a real <strong> element, in its own <li>.
+        const removeItem = qa('li').find((el) => el.textContent.includes('remove the styling'));
+        expect(removeItem.querySelector('strong')?.textContent).toBe('To remove the styling:');
+        // Nothing in the rendered text should still show raw markdown syntax.
+        expect(document.body.textContent).not.toMatch(/\*\*/);
+        expect(document.body.textContent).not.toMatch(/`&magic`/);
+    });
+
     it('searching skips straight to matching automations across every category', async () => {
         await openFlowsAutomations();
         const input = q('input[placeholder="Search Flows Automations..."]');
         await typeInto(input, 'combo');
         expect(document.body.textContent).toContain('Function keys on Go60');
+    });
+
+    it('search also matches a flow\'s description, not just its title/subtitle/category', async () => {
+        await openFlowsAutomations();
+        const input = q('input[placeholder="Search Flows Automations..."]');
+        // "letters" appears only in Home-Row Mods' own description ("...act as normal letters when
+        // tapped, and as modifier keys when held") — nowhere in its title ("Home-Row Mods"),
+        // subtitle ("Adds Home-Row Modifiers"), or category ("Home-Row Mods"). If this only matched
+        // title/subtitle/category (the pre-fix behavior), this query would come up empty.
+        await typeInto(input, 'letters');
+        expect(document.body.textContent).toContain('Home-Row Mods');
+        expect(document.body.textContent).not.toContain('No Flows Automations match your search');
+    });
+
+    it('search matches a hyphenated title against an unhyphenated query (and vice versa)', async () => {
+        // Found via the command palette's own real-browser QA, but the same substring-match code
+        // this search runs on predates that entirely — "Home-Row Mods" (title/category) and
+        // "home-row keys" (description) are hyphenated throughout the catalog, so typing it the way
+        // most people actually would ("home row mods") never matched before normalizeForSearch.
+        await openFlowsAutomations();
+        const input = q('input[placeholder="Search Flows Automations..."]');
+        await typeInto(input, 'home row mods');
+        expect(document.body.textContent).toContain('Home-Row Mods');
+        expect(document.body.textContent).not.toContain('No Flows Automations match your search');
     });
 
     it('applies a param-free real automation (Fn_combos) end to end and shows a success result box with its custom message', async () => {

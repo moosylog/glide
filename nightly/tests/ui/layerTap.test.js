@@ -18,7 +18,7 @@ describe('Layer-Tap on an empty key', () => {
 
     // Use the dedicated "Layer-Tap (&lt)" button, not the generic "Momentary" one (which
     // targets whichever slot is already active rather than setting up the hold slot itself).
-    await click(byTitle('Layers'));
+    await click(byTitle('Switch Layer'));
     const ltLabel = qa('span').find((s) => s.textContent.trim() === 'Layer-Tap (&lt)');
     const ltAssignBtn = ltLabel.closest('div.flex.justify-between')?.querySelector('button');
     await click(ltAssignBtn);

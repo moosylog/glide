@@ -10,7 +10,8 @@ describe('behaviors/registry — schema lookup', () => {
     expect(schema.zmk_behavior).toBe('zmk,behavior-hold-tap');
     const keys = schema.properties.map((p) => p.key);
     expect(keys).toEqual([
-      'flavor', 'tappingTermMs', 'quickTapMs', 'requirePriorIdleMs', 'retroTap', 'holdTriggerOnRelease', 'holdTriggerKeyPositions',
+      'flavor', 'tappingTermMs', 'quickTapMs', 'requirePriorIdleMs', 'retroTap', 'holdTriggerOnRelease',
+      'holdWhileUndecided', 'holdWhileUndecidedLinger', 'holdTriggerKeyPositions',
     ]);
   });
 
@@ -37,6 +38,8 @@ describe('behaviors/registry — schema lookup', () => {
       requirePriorIdleMs: 0,
       retroTap: false,
       holdTriggerOnRelease: false,
+      holdWhileUndecided: false,
+      holdWhileUndecidedLinger: false,
       holdTriggerKeyPositions: [],
     });
   });

@@ -48,6 +48,8 @@ describe('behaviors/compile — coercing raw widget input against a schema', () 
       requirePriorIdleMs: 0,
       retroTap: false,
       holdTriggerOnRelease: false,
+      holdWhileUndecided: false,
+      holdWhileUndecidedLinger: false,
       holdTriggerKeyPositions: [],
     });
   });
