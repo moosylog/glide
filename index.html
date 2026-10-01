@@ -113,7 +113,13 @@
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), inset 0 -2px 0 var(--key-shadow), 0 8px 18px rgba(0,0,0,0.5);
         }
        
-        .p-key.selected {
+        /* Bug: this used to be `.p-key.selected`, but the `selected` modifier class is only ever
+           added to the OUTER .p-key-outer wrapper (see KeyComponent in ui/canvas.js) — the inner
+           .p-key div it names never receives it, same as the usage-highlight rule above had to
+           work around. So this whole border/glow/scale look was dead CSS: selecting a key only
+           ever did the z-index bump below, which is invisible except when keys overlap. Switched
+           to the same descendant-selector pattern as .usage-highlight so it actually matches. */
+        .p-key-outer.selected .p-key {
             border: 3px solid var(--accent-primary) !important;
             box-shadow: inset 0 0 15px rgba(229, 95, 46, 0.2), 0 12px 35px rgba(229, 95, 46, 0.5) !important;
             transform: scale(1.08) translateY(-2px);
@@ -2031,21 +2037,34 @@ const App = () => {
                     <main style={{ order: sidebarSide === 'right' ? 0 : 2 }} className={`flex-1 flex ${layoutMode === 'right' ? 'flex-row' : 'flex-col'} min-w-0 relative z-10 overflow-hidden`}>
                         <section className="flex-1 flex relative overflow-hidden bg-transparent">
                             {!config ? (
-                                <div className="m-auto text-app-textMuted flex flex-col items-center gap-6 bg-app-card p-10 rounded-2xl border border-app-borderHighlight shadow-2xl max-w-md text-center transition-colors">
-                                    <div className="w-16 h-16 rounded-full bg-app-surface border border-app-borderHighlight flex items-center justify-center text-app-accent shadow-inner">
-                                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <h2 className="text-xl font-bold text-app-text">Start a Layout</h2>
-                                        <p className="text-sm">A "layout" is just a JSON file describing what every key on your keyboard does — the same file your keyboard's own configurator exports, or one you've saved from GLIDE before. Import one below, or start blank with a template for your keyboard.</p>
-                                    </div>
-                                    <div className="flex gap-3 w-full">
-                                        <label className="flex-1 btn-active font-bold py-3 rounded-xl cursor-pointer transition-all text-center border-none shadow-lg hover:-translate-y-px">Import Layout File<input type="file" accept=".json" className="hidden" onChange={handleFileUpload} /></label>
-                                    </div>
-                                    <div className="w-full flex items-center gap-4"><div className="h-px bg-app-borderHighlight flex-1"></div><span className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Or start blank</span><div className="h-px bg-app-borderHighlight flex-1"></div></div>
-                                    <div className="flex gap-3 w-full">
-                                        <button onClick={() => fetchTemplate('glove80')} disabled={isFetchingTemplate} className="flex-1 bg-app-surface hover:bg-app-panel border border-app-borderHighlight text-app-text py-2.5 rounded-xl transition-all font-medium shadow-sm hover:-translate-y-px">Glove80</button>
-                                        <button onClick={() => fetchTemplate('go60')} disabled={isFetchingTemplate} className="flex-1 bg-app-surface hover:bg-app-panel border border-app-borderHighlight text-app-text py-2.5 rounded-xl transition-all font-medium shadow-sm hover:-translate-y-px">Go60</button>
+                                // Every ancestor up to <body> is overflow-hidden by design (this is a
+                                // canvas app, not a scrolling page) — fine for the keyboard canvas,
+                                // which pans/zooms itself, but this empty-state card is ordinary
+                                // content and has no such escape hatch of its own. On a short mobile
+                                // viewport it could be taller than the available space with no way to
+                                // reach what's cut off. The outer div here is the scroll container;
+                                // the inner `min-h-full` one keeps the card centered when it fits
+                                // without re-triggering the classic flexbox bug where centering a
+                                // scroll container's own content clips its start when it overflows.
+                                <div className="w-full h-full overflow-y-auto">
+                                    <div className="min-h-full flex items-center justify-center p-4">
+                                        <div className="text-app-textMuted flex flex-col items-center gap-4 sm:gap-6 bg-app-card p-6 sm:p-10 rounded-2xl border border-app-borderHighlight shadow-2xl max-w-md text-center transition-colors">
+                                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-app-surface border border-app-borderHighlight flex items-center justify-center text-app-accent shadow-inner shrink-0">
+                                                <svg className="w-7 h-7 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <h2 className="text-xl font-bold text-app-text">Start a Layout</h2>
+                                                <p className="text-sm">A "layout" is just a JSON file describing what every key on your keyboard does — the same file your keyboard's own configurator exports, or one you've saved from GLIDE before. Import one below, or start blank with a template for your keyboard.</p>
+                                            </div>
+                                            <div className="flex gap-3 w-full">
+                                                <label className="flex-1 btn-active font-bold py-3 rounded-xl cursor-pointer transition-all text-center border-none shadow-lg hover:-translate-y-px">Import Layout File<input type="file" accept=".json" className="hidden" onChange={handleFileUpload} /></label>
+                                            </div>
+                                            <div className="w-full flex items-center gap-4"><div className="h-px bg-app-borderHighlight flex-1"></div><span className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Or start blank</span><div className="h-px bg-app-borderHighlight flex-1"></div></div>
+                                            <div className="flex gap-3 w-full">
+                                                <button onClick={() => fetchTemplate('glove80')} disabled={isFetchingTemplate} className="flex-1 bg-app-surface hover:bg-app-panel border border-app-borderHighlight text-app-text py-2.5 rounded-xl transition-all font-medium shadow-sm hover:-translate-y-px">Glove80</button>
+                                                <button onClick={() => fetchTemplate('go60')} disabled={isFetchingTemplate} className="flex-1 bg-app-surface hover:bg-app-panel border border-app-borderHighlight text-app-text py-2.5 rounded-xl transition-all font-medium shadow-sm hover:-translate-y-px">Go60</button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             ) : (
