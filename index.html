@@ -401,6 +401,7 @@ const { useState, useEffect, useMemo, useCallback, memo, useRef } = React;
             ALL_PALETTE_SECTIONS,
             KEY_COLOR_PRESETS,
             bindingFromPaletteItem,
+            computeCustomBehaviors,
             describeBindingParam,
             describeBindingStep,
             getContrastColor,
@@ -588,7 +589,19 @@ const App = () => {
             const [draggedLayerIdx, setDraggedLayerIdx] = useState(null);
             const [dragOverLayerIdx, setDragOverLayerIdx] = useState(null);
 
-            const [panelSize, setPanelSize] = useState(() => layoutMode === 'right' ? 480 : 380);
+            const [panelSize, setPanelSize] = useState(() => {
+                if (layoutMode === 'right') return 480;
+                // A fixed 380px bottom-dock height assumes a spacious desktop window. On a
+                // short mobile viewport that can eat most of the available height, leaving the
+                // canvas too little room for its own floating UI (the key-selection hint pill,
+                // the zoom controls) to avoid sitting on top of the keyboard graphic itself.
+                // Scale the default down on short viewports instead, floored at the same 220px
+                // the resize handle below already enforces as this dock's minimum (see
+                // minAllowed in handleRightResizeStart) so this is a smaller starting point, not
+                // a separate, inconsistent limit.
+                if (typeof window !== 'undefined' && window.innerHeight < 700) return Math.max(220, Math.round(window.innerHeight * 0.42));
+                return 380;
+            });
             const rightResizeStateRef = useRef(null);
            
             const [leftPanelSize, setLeftPanelSize] = usePersistedState('glide_left_layout', 240, { parse: (raw) => parseInt(raw) || 240 });
@@ -917,16 +930,11 @@ const App = () => {
                 return Array.from(seen);
             }, [config]);
 
-            const customBehaviors = useMemo(() => {
-                if (!config) return [];
-                const list = [];
-                if (Array.isArray(config.macros)) { config.macros.forEach(m => list.push({ label: m.name.replace('&', ''), type: m.name, cat: 'Macro' })); }
-                if (Array.isArray(config.holdTaps)) { config.holdTaps.filter(b => !isGlideHtName(b.name)).forEach(b => list.push({ label: b.name.replace('&', ''), type: b.name, cat: 'Hold-Tap' })); }
-                if (Array.isArray(config.tapDances)) { config.tapDances.filter(b => !isRecognizedTdName(b.name)).forEach(b => list.push({ label: b.name.replace('&', ''), type: b.name, cat: 'Tap-Dance' })); }
-                if (Array.isArray(config.modMorphs)) { config.modMorphs.filter(b => !isGlideMmName(b.name)).forEach(b => list.push({ label: b.name.replace('&', ''), type: b.name, cat: 'Mod-Morph' })); }
-                if (Array.isArray(config.stickyKeys)) { config.stickyKeys.filter(b => !b.name.startsWith('&sk_auto_')).forEach(b => list.push({ label: b.name.replace('&', ''), type: b.name, cat: 'Sticky-Key' })); }
-                return list;
-            }, [config]);
+            // Moved to ui/shared.js's computeCustomBehaviors (Stage: BindingPicker rework) so
+            // the compact binding pickers in ui/builders.js can compute the exact same list —
+            // previously this logic only existed here, so those pickers had no way to offer a
+            // layout's own macros/hold-taps/etc. at all.
+            const customBehaviors = useMemo(() => computeCustomBehaviors(config), [config]);
 
             const filteredBehaviors = useMemo(() => {
                 let res = customBehaviors;
