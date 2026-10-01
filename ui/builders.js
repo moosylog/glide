@@ -1,10 +1,11 @@
 // GLIDE UI — Behavior Library builders
 //
 // The five "create/edit a custom behavior" modals (Macro, Sticky Key, Mod-Morph, Hold-Tap,
-// Tap-Dance) plus their small shared helpers, including ModMorphBindingPicker (reused by both
-// the Mod-Morph and Tap-Dance builders). Depends on ui/shared.js's palette helpers
-// (describeBindingStep/searchAcrossAllPalette/ALL_PALETTE_SECTIONS/bindingFromPaletteItem), so
-// that script tag must come first; independent of ui/canvas.js and ui/sharedForms.js. Extracted
+// Tap-Dance) plus their small shared helpers, including BindingPicker (reused by the Macro,
+// Mod-Morph, and Tap-Dance builders). Depends on ui/shared.js's palette helpers
+// (describeBindingStep/searchAcrossAllPalette/ALL_PALETTE_SECTIONS/bindingFromPaletteItem/
+// computeCustomBehaviors), so that script tag must come first; independent of ui/canvas.js and
+// ui/sharedForms.js. Extracted
 // from glide.html's single inline script (Stage 1 modularization, see ARCHITECTURE.md) —
 // behavior is unchanged, only the file it lives in.
 (function () {
@@ -131,7 +132,7 @@
             deleteTapDance,
             cloneTapDance
         } = window.GlideCore;
-    const { describeBindingStep, searchAcrossAllPalette, ALL_PALETTE_SECTIONS, bindingFromPaletteItem, MiniKeyboardMap } = window.GlideUI;
+    const { describeBindingStep, searchAcrossAllPalette, ALL_PALETTE_SECTIONS, bindingFromPaletteItem, computeCustomBehaviors, MiniKeyboardMap } = window.GlideUI;
 
         const MACRO_MODE_LABELS = { tap: 'Tap', press: 'Press', release: 'Release' };
 
@@ -163,8 +164,10 @@
             const macro = (config.macros || []).find((m) => m.name === name);
             const [parsed, setParsed] = useState(() => parseMacro(macro));
             const [nameField, setNameField] = useState(() => (macro?.name || '').replace(/^&/, ''));
+            // Tracks only which step's BindingPicker should start open (newly-added behavior
+            // steps) — BindingPicker owns its own open/search state now, so this no longer
+            // needs to hold a search string too.
             const [stepPickerIdx, setStepPickerIdx] = useState(null);
-            const [stepSearch, setStepSearch] = useState('');
 
             if (!macro) return null;
 
@@ -243,28 +246,8 @@
                                             <span className="text-[9px] font-mono text-app-textMuted shrink-0 pt-2 w-4 text-right">{i + 1}</span>
 
                                             {step.kind === 'behavior' && (
-                                                <div className="flex-1 flex flex-col gap-1.5 min-w-0">
-                                                    <div className="flex items-center gap-2">
-                                                        <code className="flex-1 min-w-0 truncate text-[11px] bg-app-surface border border-app-borderHighlight rounded px-2 py-1.5 text-app-text">{describeBindingStep(step.binding)}</code>
-                                                        <button onClick={() => { setStepPickerIdx(stepPickerIdx === i ? null : i); setStepSearch(''); }} className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg border border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-surface shrink-0">{stepPickerIdx === i ? 'Close' : 'Change'}</button>
-                                                    </div>
-                                                    {stepPickerIdx === i && (
-                                                        <div className="p-2 bg-app-surface border border-app-borderHighlight rounded-lg flex flex-col gap-2">
-                                                            <input autoFocus type="text" value={stepSearch} onChange={(e) => setStepSearch(e.target.value)} placeholder="Search keys & behaviors..." className="w-full bg-app-card border border-app-borderHighlight rounded px-2 py-1 text-[11px] text-app-text outline-none" />
-                                                            <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
-                                                                {!stepSearch.trim() && layerNames.map((n, li) => (
-                                                                    <button key={`mo-${li}`} onClick={() => { updateStep(i, { binding: { value: '&mo', params: [{ value: li, params: [] }] } }); setStepPickerIdx(null); }} className="px-2 py-1 text-[10px] font-bold rounded border border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-card">&amp;mo {n}</button>
-                                                                ))}
-                                                                {(stepSearch.trim() ? searchAcrossAllPalette(stepSearch) : ALL_PALETTE_SECTIONS).flatMap((section) => section.items).slice(0, 80).map((item, ii) => (
-                                                                    <button key={ii} onClick={() => { updateStep(i, { binding: bindingFromPaletteItem(item) }); setStepPickerIdx(null); }} className="px-2 py-1 text-[10px] font-bold rounded border border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-card">{item.label || item.code || item.type}</button>
-                                                                ))}
-                                                            </div>
-                                                            <div className="flex items-center gap-1.5 pt-1 border-t border-app-borderHighlight">
-                                                                <span className="text-[10px] text-app-textMuted shrink-0">Other:</span>
-                                                                <input type="text" placeholder="&behavior_name" defaultValue={step.binding.value} onBlur={(e) => { const v = e.target.value.trim(); if (v) updateStep(i, { binding: { value: v.startsWith('&') ? v : `&${v}` } }); }} className="flex-1 min-w-0 bg-app-card border border-app-borderHighlight rounded px-2 py-1 text-[11px] font-mono text-app-text outline-none" />
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                <div className="flex-1 min-w-0">
+                                                    <BindingPicker binding={step.binding} layerNames={layerNames} config={config} defaultOpen={stepPickerIdx === i} onChange={(b) => updateStep(i, { binding: b })} />
                                                 </div>
                                             )}
 
@@ -405,31 +388,110 @@
         // grid for the second case.
         const MOD_MORPH_FLAG_OPTIONS = ['MOD_LSFT', 'MOD_RSFT', 'MOD_LCTL', 'MOD_RCTL', 'MOD_LALT', 'MOD_RALT', 'MOD_LGUI', 'MOD_RGUI'];
 
-        const ModMorphBindingPicker = ({ label, binding, onChange, layerNames }) => {
-            const [open, setOpen] = useState(false);
+        // -- BindingPicker --
+        // The compact "pick a binding" control used inside the Behavior Library builders —
+        // a Mod-Morph case, a Tap-Dance tap slot, a Macro step — wherever a full-size Pick Key
+        // tab (ui/inspector.js) would be overkill. Replaces the old ModMorphBindingPicker (and
+        // an identical copy that used to live inline in the Macro Builder's step editor below)
+        // after a usability audit found three real problems with it:
+        //
+        //   1. It only offered layers + the bare keycode grid — never the macros/hold-taps/
+        //      tap-dances/mod-morphs/sticky-keys a layout actually defines, even though ZMK
+        //      allows nesting them (a tap-dance that taps into a macro, a mod-morph case that
+        //      triggers a hold-tap, etc). The "Your Behaviors" section below fixes that, using
+        //      the exact same list (computeCustomBehaviors) the main Pick Key tab's Advanced
+        //      Behaviors view already builds — one source of truth, not a second divergent one.
+        //   2. Its "Other:" field took any typed string on blur and saved `{ value: v }` with
+        //      no validation and no params — a typo, or a real behavior that needs parameters,
+        //      both silently produced a binding that could fail to import back into MoErgo's
+        //      Layout Editor (the same class of JSON-shape bug the hrm_bil60 fix addressed).
+        //      Removed outright rather than "improved": every binding this picker can produce
+        //      now comes from clicking something real — a layer, a keycode, or a behavior this
+        //      layout already defines — matching how the main Pick Key tab works (it has no
+        //      free-text escape hatch either). A behavior that doesn't exist yet isn't a typing
+        //      problem to work around here; it's built once in the Behavior Library, and then
+        //      it shows up under "Your Behaviors" like everything else.
+        //   3. It looked bolted-on: an unstyled flex-wrap tag cloud in a 32px scroll box, no
+        //      categories, no icons. Restyled around the same `.palette-btn` card look (with
+        //      the same `!h-auto !py-* !px-*` override pattern ui/inspector.js's own Advanced
+        //      Behaviors view already uses for text-labeled buttons) so it reads as the same
+        //      picker, not a smaller, rougher one.
+        const BindingPicker = ({ label, binding, onChange, layerNames, config, defaultOpen = false }) => {
+            const [open, setOpen] = useState(defaultOpen);
             const [search, setSearch] = useState('');
+
+            const customBehaviors = useMemo(() => computeCustomBehaviors(config), [config]);
+
+            const q = search.trim().toLowerCase();
+            const matchedLayers = !q ? (layerNames || []) : (layerNames || []).filter((n) => n.toLowerCase().includes(q));
+            const matchedBehaviors = !q ? customBehaviors : customBehaviors.filter((b) => b.label.toLowerCase().includes(q) || b.cat.toLowerCase().includes(q));
+            const keySections = q ? searchAcrossAllPalette(search) : ALL_PALETTE_SECTIONS;
+            const nothingFound = q && matchedLayers.length === 0 && matchedBehaviors.length === 0 && keySections.length === 0;
+
+            const pick = (b) => { onChange(b); setOpen(false); setSearch(''); };
+            const btnCls = "palette-btn !h-auto !min-w-0 !py-1.5 !px-2.5 text-[11px]";
+
             return (
                 <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">{label}</label>
+                    {label && <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">{label}</label>}
                     <div className="flex items-center gap-2">
                         <code className="flex-1 min-w-0 truncate text-[11px] bg-app-card border border-app-borderHighlight rounded px-2 py-1.5 text-app-text">{describeBindingStep(binding)}</code>
-                        <button onClick={() => { setOpen(!open); setSearch(''); }} className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg border border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-card shrink-0">{open ? 'Close' : 'Change'}</button>
+                        <button onClick={() => { setOpen(!open); setSearch(''); }} className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg border border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-card shrink-0 transition-colors">{open ? 'Close' : 'Change'}</button>
                     </div>
                     {open && (
-                        <div className="p-2 bg-app-card border border-app-borderHighlight rounded-lg flex flex-col gap-2">
-                            <input autoFocus type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search keys & behaviors..." className="w-full bg-app-surface border border-app-borderHighlight rounded px-2 py-1 text-[11px] text-app-text outline-none" />
-                            <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
-                                {!search.trim() && (layerNames || []).map((n, li) => (
-                                    <button key={`mo-${li}`} onClick={() => { onChange({ value: '&mo', params: [{ value: li, params: [] }] }); setOpen(false); }} className="px-2 py-1 text-[10px] font-bold rounded border border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-surface">&amp;mo {n}</button>
-                                ))}
-                                {(search.trim() ? searchAcrossAllPalette(search) : ALL_PALETTE_SECTIONS).flatMap((section) => section.items).slice(0, 80).map((item, ii) => (
-                                    <button key={ii} onClick={() => { onChange(bindingFromPaletteItem(item)); setOpen(false); }} className="px-2 py-1 text-[10px] font-bold rounded border border-app-borderHighlight text-app-textMuted hover:text-app-text bg-app-surface">{item.label || item.code || item.type}</button>
-                                ))}
+                        <div className="p-3 bg-app-card border border-app-borderHighlight rounded-xl flex flex-col gap-3 shadow-inner">
+                            <div className="relative">
+                                <svg className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-app-textMuted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                <input autoFocus type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search keys & your behaviors..." className="w-full bg-app-surface border border-app-borderHighlight rounded-lg pl-8 pr-3 py-1.5 text-[11px] text-app-text outline-none focus:border-app-text transition-colors" />
                             </div>
-                            <div className="flex items-center gap-1.5 pt-1 border-t border-app-borderHighlight">
-                                <span className="text-[10px] text-app-textMuted shrink-0">Other:</span>
-                                <input type="text" placeholder="&behavior_name" defaultValue={binding.value} onBlur={(e) => { const v = e.target.value.trim(); if (v) onChange({ value: v.startsWith('&') ? v : `&${v}` }); }} className="flex-1 min-w-0 bg-app-surface border border-app-borderHighlight rounded px-2 py-1 text-[11px] font-mono text-app-text outline-none" />
+
+                            <div className="flex flex-col gap-3 max-h-64 overflow-y-auto pr-1">
+                                {matchedLayers.length > 0 && (
+                                    <div>
+                                        <div className="text-[9px] uppercase font-bold tracking-widest text-app-textMuted mb-1.5">Layers</div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {matchedLayers.map((n) => {
+                                                const li = (layerNames || []).indexOf(n);
+                                                return <button key={`mo-${li}`} onClick={() => pick({ value: '&mo', params: [{ value: li, params: [] }] })} className={btnCls}><span className="text-app-textMuted mr-1">&amp;mo</span>{n}</button>;
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {matchedBehaviors.length > 0 && (
+                                    <div>
+                                        <div className="text-[9px] uppercase font-bold tracking-widest text-app-textMuted mb-1.5">Your Behaviors</div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {matchedBehaviors.map((b, i) => (
+                                                <button key={i} onClick={() => pick({ value: b.type })} title={b.cat} className="palette-btn !h-auto !min-w-0 !py-1.5 !px-3 !flex-col gap-0.5">
+                                                    <span className="text-[8px] uppercase tracking-widest text-app-textMuted opacity-70">{b.cat}</span>
+                                                    <span className="font-mono text-[11px]">{b.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {keySections.map((section, sIdx) => (
+                                    <div key={sIdx}>
+                                        <div className="text-[9px] uppercase font-bold tracking-widest text-app-textMuted mb-1.5 flex items-center gap-1.5">
+                                            {q && <span className="text-[8px] normal-case font-bold text-white bg-app-accent px-1.5 py-0.5 rounded">{section.tabName}</span>}
+                                            {section.category || 'General'}
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {section.items.map((item, ii) => (
+                                                <button key={ii} onClick={() => pick(bindingFromPaletteItem(item))} className={btnCls}>
+                                                    {item.top ? <span className="flex flex-col items-center leading-none"><span className="text-[9px] opacity-60">{item.top}</span><span>{item.bottom}</span></span> : (item.label || item.code || item.type)}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {nothingFound && <div className="text-app-textMuted text-[11px] italic py-2 text-center">No keys or behaviors match "{search}".</div>}
                             </div>
+
+                            <p className="text-[10px] text-app-textMuted italic border-t border-app-borderHighlight pt-2 -mb-0.5">Don't see a behavior you made? Build it in the Behavior Library first — it'll show up under "Your Behaviors" here.</p>
                         </div>
                     )}
                 </div>
@@ -487,7 +549,7 @@
                                 <input type="text" value={parsed.description} onChange={(e) => setParsed((p) => ({ ...p, description: e.target.value }))} placeholder="What does this mod-morph do?" className="w-full bg-app-card border border-app-borderHighlight rounded-lg px-3 py-2 text-xs text-app-text placeholder-app-textMuted outline-none focus:border-app-accent transition-colors" />
                             </div>
 
-                            <ModMorphBindingPicker label="Default (no mods held)" binding={parsed.cases[0].binding} layerNames={layerNames} onChange={(b) => setParsed((p) => { const n = structuredClone(p); n.cases[0].binding = b; return n; })} />
+                            <BindingPicker label="Default (no mods held)" binding={parsed.cases[0].binding} layerNames={layerNames} config={config} onChange={(b) => setParsed((p) => { const n = structuredClone(p); n.cases[0].binding = b; return n; })} />
 
                             <div className="flex flex-col gap-2">
                                 <label className="text-[10px] uppercase font-bold tracking-widest text-app-textMuted">Triggering Mods</label>
@@ -500,7 +562,7 @@
                                 <p className="text-[11px] text-app-textMuted italic">Fires when any one of the checked mods is held (not all of them at once).</p>
                             </div>
 
-                            <ModMorphBindingPicker label="When triggering mods are held" binding={parsed.cases[1].binding} layerNames={layerNames} onChange={(b) => setParsed((p) => { const n = structuredClone(p); n.cases[1].binding = b; return n; })} />
+                            <BindingPicker label="When triggering mods are held" binding={parsed.cases[1].binding} layerNames={layerNames} config={config} onChange={(b) => setParsed((p) => { const n = structuredClone(p); n.cases[1].binding = b; return n; })} />
 
                             {parsed.cases[1].mods.length > 0 && (
                                 <div className="flex flex-col gap-2">
@@ -529,7 +591,7 @@
         // Unlike the Mod-Morph Builder's two full binding pickers, a hold-tap's `bindings` are
         // plain behavior-NAME strings (see core/zmk/holdTap.js's header) — no params to pick, so a
         // simple text field per slot is enough, matching the Sticky Key Builder's "Wraps Behavior"
-        // field rather than ModMorphBindingPicker's full palette search.
+        // field rather than BindingPicker's full palette search.
         const HoldTapBuilderModal = ({ name, config, keyboardGeo, onClose, onSave }) => {
             const holdTap = (config.holdTaps || []).find((h) => h.name === name);
             const [parsed, setParsed] = useState(() => normalizeHoldTapFields(holdTap));
@@ -668,8 +730,8 @@
 
         // -- Tap-Dance Builder --
         // A tap-dance's `bindings` ARE full binding objects (unlike a hold-tap's plain name
-        // strings — see core/zmk/tapDance.js's header), so this reuses ModMorphBindingPicker for
-        // each step, with add/remove around a 2-binding minimum (ZMK requires at least 2).
+        // strings — see core/zmk/tapDance.js's header), so this reuses BindingPicker for each
+        // step, with add/remove around a 2-binding minimum (ZMK requires at least 2).
         const TapDanceBuilderModal = ({ name, config, layerNames, onClose, onSave }) => {
             const tapDance = (config.tapDances || []).find((t) => t.name === name);
             const [parsed, setParsed] = useState(() => normalizeTapDanceFields(tapDance));
@@ -722,7 +784,7 @@
                                 {parsed.bindings.map((b, idx) => (
                                     <div key={idx} className="flex items-start gap-2">
                                         <div className="flex-1 min-w-0">
-                                            <ModMorphBindingPicker label={TAP_ORDINALS[idx] || `Tap ${idx + 1}`} binding={b} layerNames={layerNames} onChange={(nb) => setBindingAt(idx, nb)} />
+                                            <BindingPicker label={TAP_ORDINALS[idx] || `Tap ${idx + 1}`} binding={b} layerNames={layerNames} config={config} onChange={(nb) => setBindingAt(idx, nb)} />
                                         </div>
                                         {parsed.bindings.length > 2 && (
                                             <button onClick={() => removeBinding(idx)} title="Remove this tap" className="mt-6 text-app-textMuted hover:text-red-400 text-lg leading-none shrink-0">&times;</button>

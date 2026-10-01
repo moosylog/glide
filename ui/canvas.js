@@ -339,11 +339,21 @@ const KeyboardContainer = ({ keyboardGeo, activeLayerBindings, selectedKey, onSe
             const handlePasteDock = (e) => { e.stopPropagation(); if(selectedKey !== null) onContextAction('paste', selectedKey); };
 
             return (
-                <div ref={containerRef} className={`canvas-container absolute inset-0 flex items-center justify-center ${isZenMode ? 'bg-app-panel/50' : ''}`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onClick={() => { if(!isZenMode) onSelectKey(null); closeContextMenu(); }}>
-                   
-                    <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-3 z-30 pointer-events-auto backdrop-blur-xl bg-app-card/80 border border-app-borderHighlight px-4 py-2 rounded-2xl shadow-2xl transition-all">
+                <div ref={containerRef} className={`canvas-container absolute inset-0 flex items-center justify-center pt-14 sm:pt-0 ${isZenMode ? 'bg-app-panel/50' : ''}`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onClick={() => { if(!isZenMode) onSelectKey(null); closeContextMenu(); }}>
+
+                    {/* This floating pill used to just overlay the top of the canvas with no
+                        space reserved for it — fine on desktop, where the canvas area is tall
+                        enough that the auto-fit keyboard graphic never reaches up that far, but
+                        not on mobile: the bottom-docked Inspector panel's fixed height leaves a
+                        much shorter canvas area there, so the keyboard (centered in whatever
+                        height remains) could render right underneath this pill instead of below
+                        it. The canvas-container's pt-14 above reserves that room on narrow
+                        screens instead of relying on there happening to be enough margin.
+                        max-w-[94vw] + flex-wrap below keep the pill itself from overflowing a
+                        narrow viewport sideways, independent of that vertical fix. */}
+                    <div className="absolute top-3 sm:top-6 left-1/2 -translate-x-1/2 max-w-[94vw] flex items-center flex-wrap justify-center gap-2 sm:gap-3 z-30 pointer-events-auto backdrop-blur-xl bg-app-card/80 border border-app-borderHighlight px-3 sm:px-4 py-2 rounded-2xl shadow-2xl transition-all">
                         {isZenMode ? (
-                            <div className="flex items-center gap-2 text-xs font-semibold text-app-text">
+                            <div className="flex items-center flex-wrap justify-center gap-2 text-xs font-semibold text-app-text">
                                 <span className="w-2 h-2 rounded-full bg-app-accent animate-pulse"></span>
                                 <span className="text-app-text font-bold pr-2">Focus Mode: Click keys to toggle</span>
                                 <span className="text-app-textMuted bg-app-surface px-2 py-0.5 rounded border border-app-borderHighlight">{selectedComboKeys.length} keys active</span>
@@ -351,7 +361,7 @@ const KeyboardContainer = ({ keyboardGeo, activeLayerBindings, selectedKey, onSe
                                 <button onClick={stopZenMode} className="bg-emerald-500 text-white font-bold px-3 py-1 rounded-lg hover:bg-emerald-600 transition-colors shadow-sm">Done Editing</button>
                             </div>
                         ) : clipboard ? (
-                            <div className="flex items-center gap-2 text-xs font-semibold text-app-text">
+                            <div className="flex items-center flex-wrap justify-center gap-2 text-xs font-semibold text-app-text">
                                 <span className="text-app-textMuted font-mono">Clipboard:</span>
                                 <span className="px-2 py-0.5 bg-app-surface border border-app-borderHighlight rounded font-mono text-app-accent truncate max-w-[120px]">{describeBinding(clipboard, osMode, layerNames)}</span>
                                 <div className="w-px h-4 bg-app-borderHighlight mx-1"></div>
@@ -359,7 +369,14 @@ const KeyboardContainer = ({ keyboardGeo, activeLayerBindings, selectedKey, onSe
                                 <button onClick={(e) => { e.stopPropagation(); onContextAction('clearClipboard', null); }} className="p-1 text-app-textMuted hover:text-red-400 hover:bg-red-500/10 rounded transition-colors" title="Clear Clipboard">🗑️</button>
                             </div>
                         ) : (
-                            <span className="text-[11px] text-app-textMuted font-medium tracking-wide">Click a key to edit • Right-click for options • Drag to swap</span>
+                            <span className="text-[11px] text-app-textMuted font-medium tracking-wide text-center">
+                                {/* "Right-click" is desktop-only wording — touch has no right-click,
+                                    it long-presses instead (see handleKeyMouseDown's longPressFired
+                                    above) — and the full three-part hint is wider than most phones.
+                                    A shorter, touch-accurate line below `sm`, the original above it. */}
+                                <span className="sm:hidden">Tap a key to edit · Long-press for options</span>
+                                <span className="hidden sm:inline">Click a key to edit • Right-click for options • Drag to swap</span>
+                            </span>
                         )}
                     </div>
 

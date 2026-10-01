@@ -176,6 +176,27 @@
             return { value: '&none' };
         }
 
+        // -- Custom-behaviors list (Behavior Library) --
+        // The macros/hold-taps/tap-dances/mod-morphs/sticky-keys a layout actually defines,
+        // minus GLIDE's own auto-generated ones (auto_ht_*/auto_mm_*/td_* synthesized for the
+        // slot-model's bookkeeping — see core/zmk/naming.js) — those aren't things a user
+        // authored and picked, so listing them back as "your behaviors" would be noise at best
+        // and a confusing loop at worst. Single source of truth for both the main Pick Key
+        // tab's "Advanced Behaviors" list (glide.html's `customBehaviors` memo) and
+        // BindingPicker's "Your Behaviors" section (ui/builders.js) — previously only
+        // glide.html computed this, so the compact binding pickers used inside the Macro/
+        // Mod-Morph/Tap-Dance builders had no way to offer it at all.
+        function computeCustomBehaviors(config) {
+            if (!config) return [];
+            const list = [];
+            if (Array.isArray(config.macros)) { config.macros.forEach(m => list.push({ label: m.name.replace('&', ''), type: m.name, cat: 'Macro' })); }
+            if (Array.isArray(config.holdTaps)) { config.holdTaps.filter(b => !isGlideHtName(b.name)).forEach(b => list.push({ label: b.name.replace('&', ''), type: b.name, cat: 'Hold-Tap' })); }
+            if (Array.isArray(config.tapDances)) { config.tapDances.filter(b => !isRecognizedTdName(b.name)).forEach(b => list.push({ label: b.name.replace('&', ''), type: b.name, cat: 'Tap-Dance' })); }
+            if (Array.isArray(config.modMorphs)) { config.modMorphs.filter(b => !isGlideMmName(b.name)).forEach(b => list.push({ label: b.name.replace('&', ''), type: b.name, cat: 'Mod-Morph' })); }
+            if (Array.isArray(config.stickyKeys)) { config.stickyKeys.filter(b => !b.name.startsWith('&sk_auto_')).forEach(b => list.push({ label: b.name.replace('&', ''), type: b.name, cat: 'Sticky-Key' })); }
+            return list;
+        }
+
         // -- Flows Automations' description text --
         // Real gap found auditing the Flows Automations modal: `description` fields in
         // core/capabilities/builtinCatalog.js carry real markdown (bold, inline code, links,
@@ -337,5 +358,5 @@
         const detectOs = () => { const platform = navigator.userAgent.toLowerCase(); if (platform.includes('mac')) return 'mac'; if (platform.includes('linux')) return 'linux'; return 'win'; };
 
     window.GlideUI = window.GlideUI || {};
-    Object.assign(window.GlideUI, { PALETTE_DATA, FLAT_GRID_TABS, searchAcrossAllPalette, ALL_PALETTE_SECTIONS, KEY_COLOR_PRESETS, bindingFromPaletteItem, describeBindingParam, describeBindingStep, getContrastColor, escapeHtml, mainLabelSizeClass, getBeautifulLabel, detectOs, renderFlowMarkdown });
+    Object.assign(window.GlideUI, { PALETTE_DATA, FLAT_GRID_TABS, searchAcrossAllPalette, ALL_PALETTE_SECTIONS, KEY_COLOR_PRESETS, bindingFromPaletteItem, computeCustomBehaviors, describeBindingParam, describeBindingStep, getContrastColor, escapeHtml, mainLabelSizeClass, getBeautifulLabel, detectOs, renderFlowMarkdown });
 })();
