@@ -160,11 +160,13 @@
 
         // A short "which keyboard(s)" label — shown on every list row and detail view so
         // compatibility is visible while browsing, not just as a warning after drilling in.
+        // Deliberately matches the flows/<shared|glove80|go60>/ folder names a flow's own .flows
+        // file actually lives under, rather than "Go60 only"/"Glove80 only" — so the label
+        // doubles as a pointer to where to find (or add) that flow's source file.
         const flowHardwareLabel = (entry) => {
             const kbs = entry.manifest.keyboards;
-            if (!kbs || kbs.length === 0) return 'Go60 · Glove80';
-            const names = kbs.map((k) => (k === 'go60' ? 'Go60' : k === 'glove80' ? 'Glove80' : k));
-            return kbs.length > 1 ? names.join(' · ') : `${names[0]} only`;
+            if (!kbs || kbs.length !== 1) return 'Shared';
+            return kbs[0] === 'go60' ? 'Go60' : kbs[0] === 'glove80' ? 'Glove80' : kbs[0];
         };
 
         // Settings for one of Go60's two Cirque trackpads (key positions 60/61 — see

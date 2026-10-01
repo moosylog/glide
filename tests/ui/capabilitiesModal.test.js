@@ -209,7 +209,7 @@ describe('Flows Automations modal', () => {
         await openFlowsAutomations();
         await clickCategory('macOS');
         await clickCapability('🍏 Remap to/from macOS');
-        expect(document.body.textContent).toContain('Go60 · Glove80'); // hardware badge, unrestricted
+        expect(document.body.textContent).toContain('Shared'); // hardware badge, unrestricted
         await click(byText('button', 'Apply to Layout'));
         await delay(300);
         expect(document.body.textContent).toContain('Success');
@@ -234,7 +234,7 @@ describe('Flows Automations modal', () => {
         expect(document.body.textContent).toContain('Gaming Layer 60');
         expect(document.body.textContent).not.toContain('Gaming Layer 80'); // glove80-only, current layout is go60.json
         await clickCapability('Gaming Layer 60');
-        expect(document.body.textContent).toContain('Go60 only');
+        expect(document.body.textContent).toContain('Go60');
     });
 
     it('shows the two newest categories (Mouse Controls, Symbols) with their own icons', async () => {
