@@ -110,7 +110,15 @@
     }) => {
         return (
             <aside style={{ width: `${leftPanelSize}px`, order: sidebarSide === 'right' ? 2 : 0 }} className={`shrink-0 bg-app-sidebar flex flex-col z-30 transition-colors relative h-full ${sidebarSide === 'right' ? 'border-l' : 'border-r'} border-app-borderHighlight`}>
-                <div onPointerDown={handleLeftResizeStart} title="Drag to resize" style={{ touchAction: 'none' }} className={`absolute top-0 bottom-0 w-3 cursor-col-resize z-50 flex items-center justify-center group ${sidebarSide === 'right' ? '-left-3' : '-right-3'}`}>
+                {/* This hit-zone used to bleed 12px out into whichever pane sits on the other
+                    side of this border (`-left-3`/`-right-3`), so it could be grabbed from
+                    either side. When sidebarSide is 'right' that neighbor is the Inspector
+                    panel, and that same 12px strip is exactly where its scrollable tabs'
+                    (e.g. Pick Key's) native scrollbar renders — this handle sat on top of it
+                    (z-50) and won every drag, so the scrollbar couldn't be used at all. Kept
+                    flush inside this pane's own edge instead: still grabbable right at the
+                    border pixel, but never overlaps a neighbor's content. */}
+                <div onPointerDown={handleLeftResizeStart} title="Drag to resize" style={{ touchAction: 'none' }} className={`absolute top-0 bottom-0 w-4 cursor-col-resize z-50 flex items-center justify-center group ${sidebarSide === 'right' ? 'left-0' : 'right-0'}`}>
                     <div className="w-1 h-14 rounded-full bg-app-borderHighlight group-hover:bg-app-accent transition-colors"></div>
                 </div>
                 {config && (
