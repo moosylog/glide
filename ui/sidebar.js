@@ -117,7 +117,19 @@
                     (e.g. Pick Key's) native scrollbar renders — this handle sat on top of it
                     (z-50) and won every drag, so the scrollbar couldn't be used at all. Kept
                     flush inside this pane's own edge instead: still grabbable right at the
-                    border pixel, but never overlaps a neighbor's content. */}
+                    border pixel, but never overlaps a neighbor's content.
+
+                    That fix introduced the same bug one layer in: with no gutter reserved, the
+                    handle's own 16px-wide hit-zone sat exactly where THIS pane's own Layers/
+                    Combos list renders ITS native scrollbar (the scrollable div below filled the
+                    full aside width, so its scrollbar hugs the same edge pixel the handle covers
+                    at z-50) — dragging the scrollbar thumb grabbed the resize handle instead, so
+                    the list couldn't be scrolled by its own scrollbar once there were enough
+                    items to need one. Fixed on the scrollable container itself, just below (see
+                    its own comment) — the header button row above it isn't scrollable, so it's
+                    deliberately left overlapping the handle exactly as before, rather than
+                    reserving a gutter here on the whole aside and leaving a visible seam behind
+                    that row's own background. */}
                 <div onPointerDown={handleLeftResizeStart} title="Drag to resize" style={{ touchAction: 'none' }} className={`absolute top-0 bottom-0 w-4 cursor-col-resize z-50 flex items-center justify-center group ${sidebarSide === 'right' ? 'left-0' : 'right-0'}`}>
                     <div className="w-1 h-14 rounded-full bg-app-borderHighlight group-hover:bg-app-accent transition-colors"></div>
                 </div>
@@ -144,7 +156,14 @@
                     </div>
                 )}
 
-                <div className="flex-1 overflow-x-hidden overflow-y-auto flex flex-col min-h-0 relative">
+                {/* mr-4/ml-4 (matching the resize handle's own w-4 above) reserves a dedicated
+                    gutter for the handle so this div's content box — and with it, its native
+                    vertical scrollbar, which otherwise hugs this same inner edge — ends 16px
+                    before the handle's strip instead of underneath it. Without this, the
+                    scrollbar and the resize handle occupied the exact same pixels, and the
+                    handle's z-50 always won, so the list couldn't be scrolled by dragging its
+                    own scrollbar once there were enough layers/combos to need one. */}
+                <div className={`flex-1 overflow-x-hidden overflow-y-auto flex flex-col min-h-0 relative ${sidebarSide === 'right' ? 'ml-4' : 'mr-4'}`}>
                     {config && leftNavMode === 'Layers' && (
                         <div className="p-4 flex flex-col gap-2 min-w-max">
                             {layerNames.map((displayName, i) => {
