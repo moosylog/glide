@@ -52,9 +52,10 @@ index.html           # an exact copy of glide.html, kept in sync automatically (
                       # this is the name GitHub Pages requires at the repo root to serve it
 core/                # framework-free domain logic (ZMK bindings, geometry, schemas, capabilities/Flows engine)
 ui/                  # React components (sidebar, canvas, inspector, modals, top bar)
+flows/               # Flows Automations, one .flows file each, under shared/glove80/go60/ + generated index.json
 tests/               # vitest suite — core/ unit tests (Node) + ui/ integration tests (jsdom)
 scripts/             # build tooling (bundleSingleFile.mjs inlines everything into one portable file, on demand)
-.github/workflows/    # auto-syncs index.html from glide.html on every push (see below)
+.github/workflows/    # auto-syncs index.html from glide.html, and flows/index.json from flows/**, on every push
 ARCHITECTURE.md       # the modularization plan and module responsibilities
 DEVLOG.md             # a running log of notable fixes and design decisions, oldest first
 ```
@@ -71,6 +72,7 @@ npm install
 npm test               # runs the full vitest suite (core/ + ui/)
 npm run build:bundle    # produces a single portable dist/glide.html for offline/no-server use
 npm run build:css       # regenerates core/styles/tailwind.generated.css
+npm run build:flows     # regenerates flows/index.json from flows/**/*.flows
 ```
 
 `glide.html` is the file to edit — it pulls in `core/*.js` and `ui/*.js` via ordinary
@@ -79,6 +81,15 @@ part of deploying it. `npm run build:bundle` is only for producing a standalone,
 copy for offline use — it's not used by the live site. See [`ARCHITECTURE.md`](./ARCHITECTURE.md)
 for why the source is structured this way, and [`DEVLOG.md`](./DEVLOG.md) for the history of how
 it got here.
+
+**Adding or changing a Flows Automation never touches app code.** Each one is a standalone
+`.flows` file (the same TOML-ish format [flows4json](https://github.com/moosylog/flows4json)
+itself uses — `uid`/`title`/`description`/`script`/`[manifest]`/`[[param]]` — plus a GLIDE-only
+`successMessage` field shown after a successful Apply) under `flows/shared/` (works on both
+keyboards), `flows/glove80/`, or `flows/go60/`. Add, edit, or delete a `.flows` file, then run
+`npm run build:flows` to regenerate `flows/index.json` — the compiled catalog `glide.html` fetches
+at startup. A GitHub Actions workflow (`sync-flows-index.yml`) does this automatically and commits
+the result on every push touching `flows/**`, so a forgotten manual rebuild never ships stale.
 
 ## Status
 

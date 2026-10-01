@@ -24,6 +24,5 @@ import '../../core/capabilities/paramBinding.js';
 import '../../core/capabilities/catalogSchema.js';
 import '../../core/capabilities/jqRunner.js';
 import '../../core/capabilities/applyFlow.js';
-import '../../core/capabilities/builtinCatalog.js';
 
 export const GlideCore = globalThis.window.GlideCore;

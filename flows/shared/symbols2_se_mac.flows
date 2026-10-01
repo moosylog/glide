@@ -1,0 +1,106 @@
+uid = "symbols2_se_mac"
+
+title = "Symbols 2 Swedish macOS"
+
+subtitle = "🌍 Map en-US to sv-SE-mac"
+
+description = '''
+Fixes your **Symbol** layer so it types the right characters once you switch your OS keyboard language to Swedish (sv-SE) on macOS.
+
+⚠️ Requires the **Symbol** layer — add it first with the Symbol Layer automation. (These mappings are generated automatically, not hand-verified — flag it if something looks wrong.)'''
+
+script = '''
+# ==============================================================================
+#             SWEDISH SYMBOL MAPPER (For MoErgo Layout Editor / ZMK)
+#             OS TARGET: macOS (Standard ISO / sv-SE)
+# ==============================================================================
+# 
+# WELCOME! This script translates your "Symbol" layer keys for a Swedish macOS target.
+# Maps aliases (e.g., SQT/SINGLE_QUOTE) to prevent any normalization bugs.
+# ==============================================================================
+
+{
+  "GRAVE":               [{"value": "LS", "params": [{"value": "EQUAL", "params": []}]}],         # ` -> Shift + ´
+  "COMMA":               [{"value": "COMMA", "params": []}],                                      # , -> ,
+  "LS(N9)":              [{"value": "LS", "params": [{"value": "N8", "params": []}]}],            # ( -> Shift + 8
+  "LS(N0)":              [{"value": "LS", "params": [{"value": "N9", "params": []}]}],            # ) -> Shift + 9
+  "SEMI":                [{"value": "LS", "params": [{"value": "COMMA", "params": []}]}],         # ; -> Shift + ,
+  "DOT":                 [{"value": "DOT", "params": []}],                                        # . -> .
+  "LS(N1)":              [{"value": "LS", "params": [{"value": "N1", "params": []}]}],            # ! -> Shift + 1
+  "LBKT":                [{"value": "LA", "params": [{"value": "N8", "params": []}]}],            # [ -> Option + 8
+  "LS(LBKT)":            [{"value": "LS", "params": [{"value": "LA", "params": [{"value": "N8", "params": []}]}]}], # { -> Shift + Option + 8
+  "LS(RBKT)":            [{"value": "LS", "params": [{"value": "LA", "params": [{"value": "N9", "params": []}]}]}], # } -> Shift + Option + 9
+  "RBKT":                [{"value": "LA", "params": [{"value": "N9", "params": []}]}],            # ] -> Option + 9
+  "LS(FSLH)":            [{"value": "LS", "params": [{"value": "MINUS", "params": []}]}],         # ? -> Shift + +
+  "LS(N3)":              [{"value": "LS", "params": [{"value": "N3", "params": []}]}],            # # -> Shift + 3
+  "LS(N6)":              [{"value": "LS", "params": [{"value": "RBKT", "params": []}]}],          # ^ -> Shift + ¨
+  "EQUAL":               [{"value": "LS", "params": [{"value": "N0", "params": []}]}],            # = -> Shift + 0
+  "LS(MINUS)":           [{"value": "LS", "params": [{"value": "FSLH", "params": []}]}],          # _ -> Shift + -
+  "UNDERSCORE":          [{"value": "LS", "params": [{"value": "FSLH", "params": []}]}],          # Alternate alias for _
+  "LS(N4)":              [{"value": "LA", "params": [{"value": "N4", "params": []}]}],            # $ -> Option + 4
+  "LS(N8)":              [{"value": "SQT", "params": []}],                                        # * -> Key next to Ä (US SQT)
+  "LS(SINGLE_QUOTE)":    [{"value": "LS", "params": [{"value": "N2", "params": []}]}],            # " -> Shift + 2
+  "LS(SQT)":             [{"value": "LS", "params": [{"value": "N2", "params": []}]}],            # Alternate alias for "
+  "LS(GRAVE)":           [{"value": "LA", "params": [{"value": "RBKT", "params": []}]}],          # ~ -> Option + ¨
+  "LS(COMMA)":           [{"value": "NON_US_BSLH", "params": []}],                                # < -> < key
+  "LS(BSLH)":            [{"value": "LA", "params": [{"value": "N7", "params": []}]}],            # | -> Option + 7
+  "MINUS":               [{"value": "FSLH", "params": []}],                                       # - -> - key (US FSLH position)
+  "LS(DOT)":             [{"value": "LS", "params": [{"value": "NON_US_BSLH", "params": []}]}],   # > -> Shift + <
+  "FSLH":                [{"value": "LS", "params": [{"value": "N7", "params": []}]}],            # / -> Shift + 7
+  "SQT":                 [{"value": "LS", "params": [{"value": "SQT", "params": []}]}],           # ' -> Shift + Key next to Ä
+  "SINGLE_QUOTE":        [{"value": "LS", "params": [{"value": "SQT", "params": []}]}],           # Alternate alias for '
+  "BSLH":                [{"value": "LS", "params": [{"value": "LA", "params": [{"value": "N7", "params": []}]}]}], # \ -> Shift + Option + 7
+  "LS(N7)":              [{"value": "LS", "params": [{"value": "N6", "params": []}]}],            # & -> Shift + 6
+  "LS(N5)":              [{"value": "LS", "params": [{"value": "N5", "params": []}]}],            # % -> Shift + 5
+  "LS(SEMI)":            [{"value": "LS", "params": [{"value": "DOT", "params": []}]}],           # : -> Shift + .
+  "LS(N2)":              [{"value": "LA", "params": [{"value": "N2", "params": []}]}]             # @ -> Option + 2
+} as $swedish_symbol_map |
+
+# ==============================================================================
+# CONFIGURATION TARGETS
+# ==============================================================================
+
+.locale = "sv-SE-mac" |
+"Symbol" as $layer_to_translate |
+
+# ==============================================================================
+# BEHIND-THE-SCENES TRANSLATION ENGINE
+# ==============================================================================
+
+(.layer_names // .keymap.layer_names) as $all_layers |
+
+if $all_layers == null then
+  "Error: Could not find any keyboard layer names in this file." | halt_error
+else
+  ($all_layers | index($layer_to_translate)) as $layer_index |
+
+  if $layer_index == null then
+    "Error: The layer named '\($layer_to_translate)' does not exist." | halt_error
+  else
+    if .keymap.layers then .keymap.layers else .layers end |= (
+      .[$layer_index] |= map(
+        if . == null or .value != "&kp" or .params == null or .params == [] then 
+          .
+        else
+          # Extracts inner parameters safely to eliminate outer wrapper mismatch
+          (.params[0] | if .params == null or .params == [] then .value else "\(.value)(\(.params[0].value))" end) as $current_key |
+          
+          if $swedish_symbol_map[$current_key] then 
+            .params = $swedish_symbol_map[$current_key] 
+          else 
+            . 
+          end
+        end
+      )
+    )
+  end
+end'''
+
+category = "Symbols"
+
+successMessage = "Your Symbol layer's punctuation now matches what a Swedish (sv-SE) macOS layout actually produces for each key."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "🇸🇪"

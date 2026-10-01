@@ -1,0 +1,64 @@
+uid = "colors_magic"
+
+title = "Magic Key Stylizer"
+
+subtitle = "Decorate or clear all Magic keys"
+
+description = '''
+Gives every `&magic` key across all your layers the same look — the classic icon, in colors you choose.
+
+- Set the background and icon color with the parameters below.
+- **To remove the styling:** leave the Background field blank and hit Apply.'''
+
+script = '''
+# ZMK Autonomous Injection Script - "Magic Key Stylizer"
+# Strategy: Deep map across all layers to target and mutate &magic behaviors
+
+(.keymap // .) |= (
+  if .layers then
+    .layers |= map(map(
+      
+      # 1. Target only the keys that are &magic
+      if type == "object" and .value == "&magic" then
+        
+        # 2. Check if the user wants to clear the decorations (blank background)
+        if ($background == null or $background == "") then
+          del(.decoration)
+          
+        # 3. Otherwise, apply the new styling
+        else
+          .decoration = {
+            "icon": "moergo-long",
+            "background": $background,
+            "color": $color
+          }
+        end
+        
+      # Leave all non-magic keys completely untouched
+      else
+        .
+      end
+    ))
+  else . end
+)'''
+
+category = "Decorations & RGB"
+
+successMessage = "Every magic key across all layers now shows your chosen colors. Run this again with the Background field left blank to remove the styling."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "✨"
+
+[[param]]
+id = "background"
+label = "Background Color (Leave blank to remove styling)"
+type = "text"
+default = "#d4dde1ff"
+
+[[param]]
+id = "color"
+label = "Icon Color"
+type = "text"
+default = "#000000ff"

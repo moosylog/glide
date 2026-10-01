@@ -1,0 +1,76 @@
+uid = "app_switcher_key"
+
+title = "Alt-Tab Switcher Key"
+
+subtitle = "Adds one macro"
+
+description = '''
+Turns Alt-Tab (or Cmd-Tab on Mac) into a single keypress. Adds one macro, **&AppSwitch** — assign it to any key or combo yourself to start using it.'''
+
+script = '''
+# ZMK Autonomous Injection Script - "App Switcher Macro"
+# Strategy: Safely append the Alt-Tab macro using strict MoErgo AST compliance
+
+(if .keymap then .keymap else . end) |= (
+  .macros |= (
+    (if . == null then [] else . end) as $m |
+    
+    # Check if '&AppSwitch' already exists to prevent duplicate injections
+    if ($m | map(.name) | index("&AppSwitch") == null) then
+      $m + [
+        {
+          "name": "&AppSwitch",
+          "description": "Alt-Tab App Switcher Macro",
+          "waitMs": 100,
+          "tapMs": 40,
+          "params": [],
+          "bindings": [
+            {
+              "value": "&macro_press",
+              "params": []
+            },
+            {
+              "value": "&kp",
+              "params": [ { "value": "LALT" } ]
+            },
+            {
+              "value": "&macro_tap",
+              "params": []
+            },
+            {
+              "value": "&kp",
+              "params": [ { "value": "TAB" } ]
+            },
+            {
+              "value": "&macro_tap",
+              "params": []
+            },
+            {
+              "value": "&sk",
+              "params": [ { "value": "LALT" } ]
+            },
+            {
+              "value": "&macro_release",
+              "params": []
+            },
+            {
+              "value": "&kp",
+              "params": [ { "value": "LALT" } ]
+            }
+          ]
+        }
+      ]
+    else
+      $m
+    end
+  )
+)'''
+
+category = "Special keys"
+
+successMessage = "A new &AppSwitch macro is ready — assign it to any key or combo in the Layout Editor for one-press Alt-Tab/Cmd-Tab switching."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "💊"

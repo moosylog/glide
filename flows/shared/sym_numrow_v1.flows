@@ -1,0 +1,122 @@
+uid = "sym_numrow_v1"
+
+title = "Primeagen's NumRow V1"
+
+subtitle = "Custom Number Row"
+
+description = '''
+Puts programmer symbols right on your number row — hold a number key for its symbol instead of reaching for Shift.
+
+⚠️ Replaces your current number row on the base layer. Tap-Dance and Mod-Morph versions are coming soon; only Hold-Tap works today.'''
+
+script = '''
+# ==============================================================================
+# 1. CORE UTILITIES & HARDWARE
+# ==============================================================================
+
+def log_err($msg):
+  ($msg | stderr) | empty;
+
+def GetHardware:
+  (.keyboard | if type == "string" then ascii_downcase else "" end) as $kb |
+  if $kb == "glove80" then
+    { offset: 10, len: 12 } # Glove80 number row is keys 10 through 22
+  elif $kb == "go60" then
+    { offset: 0, len: 12 }  # Go60 number row is keys 0 through 12
+  else
+    log_err("FATAL: Unsupported or missing keyboard property in layout") | halt
+  end;
+
+# ==============================================================================
+# 2. BEHAVIOR DEFINITIONS
+# ==============================================================================
+
+def get_primeagen_holdtap: {
+  "name": "&ht_primeagen",
+  "description": "Primeagen NumRow Hold-Tap",
+  "bindings": ["&kp", "&kp"],
+  "tappingTermMs": 200,
+  "flavor": "tap-preferred"
+};
+
+# ==============================================================================
+# 3. DATA REGISTRY
+# ==============================================================================
+
+# Array 1: Numbers (Tap)
+["AT","N1","N2","N3","N4","N5","N6","N7","N8","N9","N0","DOLLAR"] as $arr_nums |
+
+# Array 2: Symbols (Hold)
+["PLUS","EXCL","LBKT","LBRC","LPAR","AMPS","EQUAL","RPAR","RBRC","RBKT","ASTRK","PERCENT"] as $arr_syms |
+
+(GetHardware) as $hw |
+
+# ==============================================================================
+# 4. MAIN TRANSFORMATION ENGINE
+# ==============================================================================
+
+(.keymap // .) |= (
+  
+  # Step 1: Inject the selected behavior into the AST
+  (if $behavior_type == "hold-tap" then
+    .holdTaps = ((.holdTaps // []) + [get_primeagen_holdtap] | unique_by(.name))
+  else 
+    . 
+  end) 
+  
+  |
+
+  # Step 2: Modify the Number Row on the Base Layer
+  .layers[0] |= [
+    range(length) as $i | .[$i] |
+    
+    # Check if the current key index is strictly inside the hardware's number row
+    if ($i >= $hw.offset) and ($i < ($hw.offset + $hw.len)) then
+      
+      ($i - $hw.offset) as $idx | # Maps index back to 0-9 to pull from our arrays cleanly
+
+      if $behavior_type == "hold-tap" then
+        
+        # Safely preserve any UI decorators the user has applied
+        (if type == "object" and .decoration then { decoration: .decoration } else {} end) as $dec |
+        
+        {
+          value: "&ht_primeagen",
+          params: [
+            { value: $arr_nums[$idx], params: [] }, # Tap action (Number)
+            { value: $arr_syms[$idx], params: [] }  # Hold action (Symbol)
+          ]
+        } + $dec
+        
+      elif $behavior_type == "tap-dance" then
+        # FUTURE: Implement Tap-Dance AST structure here
+        .
+      elif $behavior_type == "mod-morph" then
+        # FUTURE: Implement Mod-Morph AST structure here
+        .
+      else 
+        . 
+      end
+
+    else 
+      . # Leave keys outside the number row completely untouched
+    end
+  ]
+)'''
+
+category = "Symbols"
+
+successMessage = "Your number row now types the number on tap and the symbol on hold, on layer 0. Re-run any time with a different Trigger Behavior (Tap-Dance and Mod-Morph are marked \"coming soon\" upstream)."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "🔢"
+
+[[param]]
+id = "behavior_type"
+label = "Trigger Behavior"
+type = "select"
+options = ["hold-tap", "tap-dance", "mod-morph"]
+labels = ["Hold-Tap (Hold for Symbol)", "Tap-Dance (Coming Soon)", "Mod-Morph (Coming Soon)"]
+default = "hold-tap"

@@ -8,8 +8,9 @@
 // GLIDE-bundled flow's script (including the .layout.keys normalizer prologue Home-Row Mods
 // needs) against the real loaded layout -> the result lands in app state via pushHistory, and a
 // small result box (success + custom follow-up text, or the real jq error) appears right where
-// the automation was launched from. The catalog is bundled with GLIDE itself
-// (core/capabilities/builtinCatalog.js) — no network fetch, so nothing here mocks fetch.
+// the automation was launched from. The catalog itself is the real flows/index.json, built from
+// the individual flows/<shared|glove80|go60>/*.flows files — testAppHarness.js's mountGlideApp
+// stubs window.fetch to serve it straight off disk, same content a real browser would fetch.
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { mountGlideApp, click, q, qa, byText, byTitle, delay, loadFixtureFile, typeInto } from './testAppHarness.js';
 

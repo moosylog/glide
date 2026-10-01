@@ -1,0 +1,77 @@
+uid = "os_remap"
+
+title = "🍏 Remap to/from macOS"
+
+subtitle = "Swap modifier: macOS/Win"
+
+description = '''
+Swaps Ctrl and Cmd/GUI everywhere in your layout — including inside combinations like Ctrl+C — so Copy, Paste, Undo and Redo land on the same physical key whether you're on macOS or Windows.
+
+Run it again any time to swap back.'''
+
+script = '''
+# 1. The Bi-directional Swap Map
+def get_replacements: {
+  "LCTRL": "LGUI",
+  "RCTRL": "RGUI",
+  "LGUI": "LCTRL",
+  "RGUI": "RCTRL",
+  "LC": "LG",
+  "RC": "RG",
+  "LG": "LC",
+  "RG": "RC"
+};
+
+# 2. The Universal Walker
+# This targets every object with a 'value' key anywhere in the file
+def for_every_binding(f):
+  (.. | objects | select(has("value"))) |= f;
+
+# PASS 1: The Specific LC(Y) Exception
+# Using a structural check to catch nested LC -> Y
+def pass_1_exception:
+  if .value == "LC" and (.params[0].value == "Y") then
+    .value = "LG"
+    | .params[0] = {
+        "value": "LS",
+        "params": [{ "value": "Z", "params": [] }]
+      }
+  else . end;
+
+# PASS 2: The Global Recursive Modifier Swap
+def pass_2_swap($r):
+
+  # Protect the result of Pass 1 from being swapped back
+  if .value == "LG"
+     and .params[0].value == "LS"
+     and .params[0].params[0].value == "Z"
+  then
+    .
+
+  else
+    .value |= (
+      if type == "string" then
+        if startswith("LC(") then sub("LC\\("; "LG(")
+        elif startswith("LG(") then sub("LG\\("; "LC(")
+        elif startswith("RC(") then sub("RC\\("; "RG(")
+        elif startswith("RG(") then sub("RG\\("; "RC(")
+        else ($r[.] // .)
+        end
+      else .
+      end
+    )
+  end;
+
+# --- EXECUTION ---
+get_replacements as $r |
+for_every_binding(pass_1_exception) |
+for_every_binding(pass_2_swap($r))'''
+
+category = "macOS"
+
+successMessage = "Ctrl and Cmd/GUI (including LC()/LG()/RC()/RG() combinations) have been swapped across every layer — familiar shortcuts like Copy, Paste, Undo and Redo now land on the same physical key regardless of which OS you're on. Run it again to swap back."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "🍎"

@@ -1,0 +1,47 @@
+name: Rebuild flows/index.json
+
+# Flows Automations are authored as individual flows/<shared|glove80|go60>/*.flows files, so a
+# flow can be added, changed, or removed without touching any core/ui JS file. glide.html fetches
+# flows/index.json (the compiled catalog) at runtime, so that file has to stay in sync with
+# whatever's actually in flows/**/*.flows — this runs scripts/buildFlowsIndex.mjs and
+# auto-commits the result, the same pattern sync-pages.yml uses for index.html, so nobody has to
+# remember to run `npm run build:flows` by hand before pushing.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "flows/**/*.flows"
+      - "scripts/buildFlowsIndex.mjs"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install smol-toml
+        run: npm install --no-save smol-toml
+
+      - name: Build flows/index.json
+        run: node scripts/buildFlowsIndex.mjs
+
+      - name: Commit flows/index.json if it changed
+        run: |
+          if ! git diff --quiet -- flows/index.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add flows/index.json
+            git commit -m "Rebuild flows/index.json [skip ci]"
+            git push
+          else
+            echo "flows/index.json already matches flows/**/*.flows — nothing to do."
+          fi

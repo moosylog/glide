@@ -1,0 +1,187 @@
+uid = "sym_numrow_v2"
+
+title = "Primeagen's NumRow v2"
+
+subtitle = "Custom Number Row"
+
+description = '''
+A second take on programmer-friendly number rows: type the symbol first, get the number on hold, double-tap, or Shift — you choose which. [How it's meant to work](https://www.youtube.com/watch?v=VzsxDbkV4rE&t=1150s).
+
+⚠️ Requires Tap-Dance and Mod-Morph support in the Layout Editor, and replaces your base layer's number row. Pick **Restore Defaults** to undo it.'''
+
+script = '''
+# ==============================================================================
+# 1. CORE UTILITIES & HARDWARE
+# ==============================================================================
+
+def log_err($msg):
+  ($msg | stderr) | empty;
+
+def GetHardware:
+  (.keyboard | if type == "string" then ascii_downcase else "" end) as $kb |
+  if $kb == "glove80" then
+    { offset: 10, len: 12 } # Glove80 number row is keys 10 through 21
+  elif $kb == "go60" then
+    { offset: 0, len: 12 }  # Go60 number row is keys 0 through 11
+  else
+    log_err("FATAL: Unsupported or missing keyboard property in layout") | halt
+  end;
+
+# ==============================================================================
+# 2. BEHAVIOR DEFINITIONS (Strict AST Matching)
+# ==============================================================================
+
+def get_primeagen_holdtap: {
+  "name": "&ht_primeagen",
+  "description": "Primeagen NumRow Hold-Tap",
+  "bindings": ["&kp", "&kp"],
+  "tappingTermMs": 200,
+  "flavor": "tap-preferred"
+};
+
+# Explicitly defined Mod-Morphs (12 definitions)
+([
+  { "name": "&mm_pr_0", "description": "Mod-Morph: + / @", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "EQUAL"}]}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N2"}]}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_pr_1", "description": "Mod-Morph: ! / 1", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N1"}]}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "N1"}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_pr_2", "description": "Mod-Morph: [ / 2", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "LBKT"}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "N2"}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_pr_3", "description": "Mod-Morph: { / 3", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "LBKT"}]}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "N3"}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_pr_4", "description": "Mod-Morph: ( / 4", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N9"}]}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "N4"}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_pr_5", "description": "Mod-Morph: & / 5", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N7"}]}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "N5"}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_pr_6", "description": "Mod-Morph: = / 6", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "EQUAL"}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "N6"}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_pr_7", "description": "Mod-Morph: ) / 7", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N0"}]}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "N7"}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_pr_8", "description": "Mod-Morph: } / 8", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "RBKT"}]}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "N8"}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_pr_9", "description": "Mod-Morph: ] / 9", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "RBKT"}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "N9"}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_pr_10", "description": "Mod-Morph: * / 0", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N8"}]}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "N0"}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_pr_11", "description": "Mod-Morph: $ / %", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N4"}]}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N5"}]}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] }
+]) as $new_morphs |
+
+# Explicitly defined Tap-Dances (12 definitions)
+([
+  { "name": "&td_pr_0", "description": "Tap-Dance: + / @", "tappingTermMs": 200, "bindings": [ { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "EQUAL"}]}] }, { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N2"}]}] } ] },
+  { "name": "&td_pr_1", "description": "Tap-Dance: ! / 1", "tappingTermMs": 200, "bindings": [ { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N1"}]}] }, { "value": "&kp", "params": [{"value": "N1"}] } ] },
+  { "name": "&td_pr_2", "description": "Tap-Dance: [ / 2", "tappingTermMs": 200, "bindings": [ { "value": "&kp", "params": [{"value": "LBKT"}] }, { "value": "&kp", "params": [{"value": "N2"}] } ] },
+  { "name": "&td_pr_3", "description": "Tap-Dance: { / 3", "tappingTermMs": 200, "bindings": [ { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "LBKT"}]}] }, { "value": "&kp", "params": [{"value": "N3"}] } ] },
+  { "name": "&td_pr_4", "description": "Tap-Dance: ( / 4", "tappingTermMs": 200, "bindings": [ { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N9"}]}] }, { "value": "&kp", "params": [{"value": "N4"}] } ] },
+  { "name": "&td_pr_5", "description": "Tap-Dance: & / 5", "tappingTermMs": 200, "bindings": [ { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N7"}]}] }, { "value": "&kp", "params": [{"value": "N5"}] } ] },
+  { "name": "&td_pr_6", "description": "Tap-Dance: = / 6", "tappingTermMs": 200, "bindings": [ { "value": "&kp", "params": [{"value": "EQUAL"}] }, { "value": "&kp", "params": [{"value": "N6"}] } ] },
+  { "name": "&td_pr_7", "description": "Tap-Dance: ) / 7", "tappingTermMs": 200, "bindings": [ { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N0"}]}] }, { "value": "&kp", "params": [{"value": "N7"}] } ] },
+  { "name": "&td_pr_8", "description": "Tap-Dance: } / 8", "tappingTermMs": 200, "bindings": [ { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "RBKT"}]}] }, { "value": "&kp", "params": [{"value": "N8"}] } ] },
+  { "name": "&td_pr_9", "description": "Tap-Dance: ] / 9", "tappingTermMs": 200, "bindings": [ { "value": "&kp", "params": [{"value": "RBKT"}] }, { "value": "&kp", "params": [{"value": "N9"}] } ] },
+  { "name": "&td_pr_10", "description": "Tap-Dance: * / 0", "tappingTermMs": 200, "bindings": [ { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N8"}]}] }, { "value": "&kp", "params": [{"value": "N0"}] } ] },
+  { "name": "&td_pr_11", "description": "Tap-Dance: $ / %", "tappingTermMs": 200, "bindings": [ { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N4"}]}] }, { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N5"}]}] } ] }
+]) as $new_dances |
+
+# Explicitly mapped parameters for the single Hold-Tap behavior
+[
+  [ {"value": "LS", "params": [{"value": "N2"}]}, {"value": "LS", "params": [{"value": "EQUAL"}]} ],
+  [ {"value": "N1"}, {"value": "LS", "params": [{"value": "N1"}]} ],
+  [ {"value": "N2"}, {"value": "LBKT"} ],
+  [ {"value": "N3"}, {"value": "LS", "params": [{"value": "LBKT"}]} ],
+  [ {"value": "N4"}, {"value": "LS", "params": [{"value": "N9"}]} ],
+  [ {"value": "N5"}, {"value": "LS", "params": [{"value": "N7"}]} ],
+  [ {"value": "N6"}, {"value": "EQUAL"} ],
+  [ {"value": "N7"}, {"value": "LS", "params": [{"value": "N0"}]} ],
+  [ {"value": "N8"}, {"value": "LS", "params": [{"value": "RBKT"}]} ],
+  [ {"value": "N9"}, {"value": "RBKT"} ],
+  [ {"value": "N0"}, {"value": "LS", "params": [{"value": "N8"}]} ],
+  [ {"value": "LS", "params": [{"value": "N4"}]}, {"value": "LS", "params": [{"value": "N5"}]} ]
+] as $ht_params |
+
+# Array 3: Defaults (for Restore option)
+["EQUAL","N1","N2","N3","N4","N5","N6","N7","N8","N9","N0","MINUS"] as $arr_defaults |
+
+# Array 4: Visual UI Labels for the keys (Symbol + Number)
+["+ @", "! 1", "[ 2", "{ 3", "( 4", "& 5", "= 6", ") 7", "} 8", "] 9", "* 0", "$ %"] as $arr_labels |
+
+(GetHardware) as $hw |
+
+# ==============================================================================
+# 3. MAIN TRANSFORMATION ENGINE
+# ==============================================================================
+
+(.keymap // .) |= (
+  
+  # Step 1: Safely inject ONLY the selected behaviors into the AST (Skipped on Restore)
+  .holdTaps = (if $behavior_type == "hold-tap" then ((.holdTaps // []) + [get_primeagen_holdtap] | unique_by(.name)) else (.holdTaps // []) end) |
+  .modMorphs = (if $behavior_type == "mod-morph" then ((.modMorphs // []) + $new_morphs | unique_by(.name)) else (.modMorphs // []) end) |
+  .tapDances = (if $behavior_type == "tap-dance" then ((.tapDances // []) + $new_dances | unique_by(.name)) else (.tapDances // []) end) |
+
+  # Step 2: Modify the Number Row on the Base Layer
+  .layers[0] |= [
+    range(length) as $i | .[$i] |
+    
+    # Check if the current key index is strictly inside the hardware's number row
+    if ($i >= $hw.offset) and ($i < ($hw.offset + $hw.len)) then
+      
+      ($i - $hw.offset) as $idx | 
+
+      # Safely extract existing decorations (like background color) to prevent overwriting them
+      (if type == "object" and .decoration then .decoration else {} end) as $base_dec |
+      
+      # Safely inject or remove the specific 'label' property based on user selection
+      ($base_dec | 
+        if $behavior_type == "restore" or $add_labels == "no" then
+          del(.label)
+        else
+          . + { "label": $arr_labels[$idx] }
+        end
+      ) as $new_dec |
+      
+      # Re-wrap into the decoration object if not empty
+      (if $new_dec == {} then {} else { "decoration": $new_dec } end) as $dec_obj |
+      
+      if $behavior_type == "restore" then
+        {
+          value: "&kp",
+          params: [{"value": $arr_defaults[$idx]}]
+        } + $dec_obj
+        
+      elif $behavior_type == "hold-tap" then
+        {
+          value: "&ht_primeagen",
+          params: $ht_params[$idx]
+        } + $dec_obj
+        
+      elif $behavior_type == "tap-dance" then
+        {
+          value: ("&td_pr_" + ($idx | tostring))
+        } + $dec_obj
+        
+      elif $behavior_type == "mod-morph" then
+        {
+          value: ("&mm_pr_" + ($idx | tostring))
+        } + $dec_obj
+        
+      else 
+        . 
+      end
+
+    else 
+      . # Leave keys outside the number row completely untouched
+    end
+  ]
+)'''
+
+category = "Symbols"
+
+successMessage = "Your number row now behaves the way you chose — tap for symbol with the number on hold, double-tap, or shift — or back to the factory row if you picked Restore Defaults."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "🔢"
+
+[[param]]
+id = "behavior_type"
+label = "Trigger Behavior"
+type = "select"
+options = ["hold-tap", "tap-dance", "mod-morph", "restore"]
+labels = ["Hold-Tap (Tap for Symbol, Hold for Number)", "Tap-Dance (Tap for Symbol, Double-Tap for Number)", "Shift for Numbers (Tap for Symbol, Shift for Number)", "Restore Defaults (Standard NumRow)"]
+default = "mod-morph"
+
+[[param]]
+id = "add_labels"
+label = "Add key decorator labels"
+type = "select"
+options = ["yes", "no"]
+default = "yes"

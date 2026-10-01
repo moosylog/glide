@@ -78,7 +78,6 @@
             isFlowCompatible,
             runJqScript,
             applyFlow,
-            BUILTIN_FLOWS_CATALOG,
             isTouchpadIndex,
             TOUCHPAD_LABEL_BY_INDEX,
             getTouchpadConfig,
@@ -342,6 +341,7 @@
             paramValues, onParamChange, isApplying, onApply,
             searchText, onSearchTextChange, results,
             engineStatus, onRetryEngine,
+            catalogStatus, onRetryCatalog,
         }) => {
             if (!isOpen) return null;
             const selected = catalog.find((f) => f.uid === selectedUid) || null;
@@ -362,7 +362,18 @@
             // Three screens share this one modal: the category grid (the app-store "home"),
             // a category's own list of automations, and one automation's detail + result box.
             let body;
-            if (selected) {
+            // flows/index.json is fetched once at startup (see glide.html) -- the catalog itself
+            // can arrive late (or fail, e.g. offline) the first time someone opens this modal.
+            if (catalogStatus === 'loading') {
+                body = <div className="text-app-textMuted text-xs italic text-center py-6">Loading Flows Automations…</div>;
+            } else if (catalogStatus === 'error') {
+                body = (
+                    <div className="text-[11px] rounded-lg px-3 py-2.5 border border-red-600/30 bg-red-950/40 text-red-200 flex items-center justify-between gap-3">
+                        <span>Couldn't load the Flows Automations catalog — check your connection.</span>
+                        <button onClick={onRetryCatalog} className="shrink-0 font-bold underline hover:no-underline">Retry</button>
+                    </div>
+                );
+            } else if (selected) {
                 const result = results[selected.uid];
                 body = (
                     <div className="flex flex-col gap-4">

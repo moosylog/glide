@@ -18,10 +18,18 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { GlideCore } from '../helpers/loadCore.js';
 
-const { renderParamLiteral, buildScriptWithParams, parseCatalog, isFlowCompatible, runJqScript, applyFlow, BUILTIN_FLOWS_CATALOG } = GlideCore;
+const { renderParamLiteral, buildScriptWithParams, parseCatalog, isFlowCompatible, runJqScript, applyFlow } = GlideCore;
 
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'flows');
 const loadFlowFile = (name) => readFileSync(path.join(fixturesDir, name), 'utf8');
+
+// The real, generated flows/index.json -- built by `npm run build:flows` (scripts/
+// buildFlowsIndex.mjs) from the individual flows/<shared|glove80|go60>/*.flows files. Loaded
+// fresh here (not through a fetch mock) since these are core-layer tests, same spirit as the
+// rest of this file running the real jq-web engine rather than a mock.
+const BUILTIN_FLOWS_CATALOG = JSON.parse(readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'flows', 'index.json'), 'utf8'
+));
 
 // A minimal stand-in for build-catalog.js's regex parsing — just enough to pull `script` and
 // `[[param]]` blocks out of a real .flows file for these tests, mirroring the real parser's
@@ -205,10 +213,10 @@ describe('capabilities/builtinCatalog — every Flows Automation shipped WITH GL
     // Sensible param values for the entries that declare params — exercises the real form
     // inputs a user would fill in, not just each param's bare default.
     const paramValuesByUid = {
-        color_magic: { background: '#112233', color: '#eeeeee' },
+        colors_magic: { background: '#112233', color: '#eeeeee' },
         hrm_add: { target_version: '2', mod_preset: 'GACS', set_decorators: true },
         alt_layout: { layout_name: 'colemak-dh' },
-        s_theme_colors: { mode: 'apply', os: 'win', theme: 'tailorkey' },
+        smart_theme_colors: { mode: 'apply', os: 'win', theme: 'tailorkey' },
     };
 
     const go60Config = { keyboard: 'go60', layer_names: ['Base'], layers: [Array.from({ length: 62 }, () => ({ value: '&kp', params: [{ value: 'A', params: [] }] }))] };
@@ -233,11 +241,11 @@ describe('capabilities/builtinCatalog — every Flows Automation shipped WITH GL
     // layer fails with the real jq error "The layer named 'Symbol' does not exist.", and running
     // add_symbl_lyr first, then any of them against ITS output, succeeds cleanly. So this suite
     // respects that real ordering dependency rather than treating it as a bug to work around.
-    const SYMBOL_LAYER_FAMILY = ['de_symbol', 'fr_symbol', 'gb_symbol', 'mac_gb_symbol', 'se_symbol', 'se_symbol_mac'];
+    const SYMBOL_LAYER_FAMILY = ['symbols2_de', 'symbols2_fr', 'symbols2_gb', 'symbols2_gb_mac', 'symbols2_se', 'symbols2_se_mac'];
 
     it('every entry actually runs against a real, compatible layout and returns that successMessage', async () => {
         const { entries } = parseCatalog(BUILTIN_FLOWS_CATALOG);
-        const addSymbolLayer = entries.find((e) => e.uid === 'add_symbl_lyr');
+        const addSymbolLayer = entries.find((e) => e.uid === 'add_symbol_layer');
         // Pre-run add_symbl_lyr once per hardware fixture, so the Symbol-layer family below has
         // a real "Symbol" layer to translate, exactly as a user would experience it in order.
         const go60WithSymbolLayer = (await applyFlow(go60Config, addSymbolLayer, paramValuesByUid.add_symbl_lyr || {})).config;
@@ -261,9 +269,9 @@ describe('capabilities/builtinCatalog — every Flows Automation shipped WITH GL
     // silently inconsistent layer lengths that glove80_gaming's equivalent script (range(80),
     // matching Glove80's real 80) never had. Fixed by sizing off the real .layers[0] length
     // instead of a literal 60.
-    it('gaming60 adds a Gaming layer the same length as every other layer on a real 62-key go60 layout', async () => {
+    it('gaming_go60 adds a Gaming layer the same length as every other layer on a real 62-key go60 layout', async () => {
         const { entries } = parseCatalog(BUILTIN_FLOWS_CATALOG);
-        const entry = entries.find((e) => e.uid === 'gaming60');
+        const entry = entries.find((e) => e.uid === 'gaming_go60');
         const config = { keyboard: 'go60', layer_names: ['Base'], layers: [Array.from({ length: 62 }, () => ({ value: '&kp', params: [{ value: 'A', params: [] }] }))] };
         const { config: result, errors } = await applyFlow(config, entry, {});
         expect(errors).toEqual([]);
@@ -278,9 +286,9 @@ describe('capabilities/builtinCatalog — every Flows Automation shipped WITH GL
     // mirror_keyboard_halves/colors_createRGBscheme this one is NOT scoped away from go60 (its
     // manifest already lists it), so this was a live bug affecting every real Go60 apply, not
     // just a theoretical one. Fixed by reading the real .layers[0] length instead.
-    it('mouse_emulation_universal builds its new layers the same length as the rest, on a real 62-key go60 layout', async () => {
+    it('mouse_emulation builds its new layers the same length as the rest, on a real 62-key go60 layout', async () => {
         const { entries } = parseCatalog(BUILTIN_FLOWS_CATALOG);
-        const entry = entries.find((e) => e.uid === 'mouse_emulation_universal');
+        const entry = entries.find((e) => e.uid === 'mouse_emulation');
         const config = { keyboard: 'go60', layer_names: ['Base'], layers: [Array.from({ length: 62 }, () => ({ value: '&kp', params: [{ value: 'A', params: [] }] }))] };
         const { config: result, errors } = await applyFlow(config, entry, {});
         expect(errors).toEqual([]);
@@ -288,9 +296,9 @@ describe('capabilities/builtinCatalog — every Flows Automation shipped WITH GL
         result.layers.forEach((l) => expect(l).toHaveLength(62));
     });
 
-    it('colors_createRGBscheme is scoped to glove80 only, since its real script assumes exactly 60 keys on go60', () => {
+    it('colors_create_rgb_scheme is scoped to glove80 only, since its real script assumes exactly 60 keys on go60', () => {
         const { entries } = parseCatalog(BUILTIN_FLOWS_CATALOG);
-        const entry = entries.find((e) => e.uid === 'colors_createRGBscheme');
+        const entry = entries.find((e) => e.uid === 'colors_create_rgb_scheme');
         expect(entry.manifest.keyboards).toEqual(['glove80']);
         expect(isFlowCompatible(entry, { keyboard: 'go60' })).toBe(false);
     });
@@ -299,17 +307,17 @@ describe('capabilities/builtinCatalog — every Flows Automation shipped WITH GL
         const { entries } = parseCatalog(BUILTIN_FLOWS_CATALOG);
         const uids = entries.map((e) => e.uid).sort();
         expect(uids).toEqual([
-            'AI_control', 'Fn_combos', 'add_symbl_lyr', 'alt_layout', 'app_switcher_key',
-            'app_switcher_macro', 'autoshift', 'color_magic', 'colors_createRGBscheme', 'de_symbol',
-            'emoji_macros', 'fr_symbol', 'gaming60', 'gb_symbol', 'glove80_gaming', 'hrm_add',
+            'ai_control', 'fn_combos', 'add_symbol_layer', 'alt_layout', 'app_switcher_key',
+            'app_switcher_macro', 'autoshift', 'colors_magic', 'colors_create_rgb_scheme', 'symbols2_de',
+            'emoji_macros', 'symbols2_fr', 'gaming_go60', 'symbols2_gb', 'gaming_glove80', 'hrm_add',
             // hrm_bil60 is GLIDE's own port of hrm_bil80 (Sunaku's Bilateral HRM) to the Go60 --
             // not sourced from upstream flows4json, unlike every other entry in this list. See
             // its own dedicated tests below for what the port had to adapt.
-            'hrm_bil60', 'hrm_bil80', 'hrm_remove', 'mac_gb_symbol', 'macro_wizard',
+            'hrm_bil60', 'hrm_bil80', 'hrm_remove', 'symbols2_gb_mac', 'macro_wizard',
             'mirror_keyboard_halves',
-            'mouse_emulation_universal', 'os_remap', 'punct_swap', 's_theme_colors', 'se_symbol',
-            'se_symbol_mac', 'sticky_oneshot_injector', 'swap_trackpads_lh_rh', 'sym_numrow',
-            'sym_numrw', 'top_15_zmk_behaviors',
+            'mouse_emulation', 'os_remap', 'punct_swap', 'smart_theme_colors', 'symbols2_se',
+            'symbols2_se_mac', 'oneshot_modifier', 'mouse_swap_trackpads', 'sym_numrow_v1',
+            'sym_numrow_v2', 'top_15_zmk_behaviors',
         ].sort());
         expect(uids).not.toContain('colors_launch_kiilix'); // launcher-only, no script
         expect(uids).not.toContain('l_cleaner'); // launcher-only, no script
@@ -319,10 +327,11 @@ describe('capabilities/builtinCatalog — every Flows Automation shipped WITH GL
         expect(uids).not.toContain('hrm_bil_dynamic'); // upstream's own script is truncated
     });
 
-    // mirror_keyboard_halves had the identical exact-60-keys assumption colors_createRGBscheme
+    // mirror_keyboard_halves had the identical exact-60-keys assumption colors_create_rgb_scheme
     // still has, but unlike that one it's a pure position swap with no physical-layout string to
-    // guess at, so it's fixed and re-enabled for go60 here (see builtinCatalog.js's header) --
-    // the general "every entry actually runs" test above already exercises it against the real
+    // guess at, so it's fixed and re-enabled for go60 here (see flows/shared/
+    // mirror_keyboard_halves.flows' own header) -- the general "every entry actually runs" test
+    // above already exercises it against the real
     // 62-key go60Config; this proves the two trackpad-listener slots specifically survive
     // untouched rather than getting silently dropped or corrupted by the mirror.
     it('mirror_keyboard_halves works on a real 62-key go60 layout, leaving the two touchpad slots untouched', async () => {

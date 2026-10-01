@@ -1,0 +1,106 @@
+uid = "oneshot_modifier"
+
+title = "OneShot Modifier"
+
+subtitle = "OneShot Sticky Keys"
+
+description = '''
+Turns Shift into a smart key: tap it to capitalize just the next letter, hold it to Shift normally — no more awkward two-hand Shift-holds for a single capital.
+
+⚠️ Requires Sticky Key support in the Layout Editor. Adds an example layer (**OneShot_example**) with a ready-to-use key — copy it onto your real Shift key to start using it. Stops safely if you already have this set up.'''
+
+script = '''
+(if type == "object" and .keymap? then .keymap else . end) |= (
+  
+  # 1. Pre-flight Conflict Checks
+  (
+    [
+      (if (.stickyKeys // []) | any(.name == "&sticky_key_quickrel") then "- StickyKey: '&sticky_key_quickrel'" else empty end),
+      (if (.macros // []) | any(.name == "&sticky_key_oneshot") then "- Macro: '&sticky_key_oneshot'" else empty end),
+      (if (.holdTaps // []) | any(.name == "&sticky_key_modtap") then "- HoldTap: '&sticky_key_modtap'" else empty end),
+      (if (.layer_names // []) | index("OneShot_example") != null then "- Layer: 'OneShot_example'" else empty end)
+    ]
+  ) as $conflicts |
+  
+  # Halt execution and print to stderr if conflicts exist
+  if ($conflicts | length > 0) then
+    error("ABORTED: The following items already exist in the layout:\n" + ($conflicts | join("\n")))
+  else
+    
+    # 2. Determine Hardware Matrix Size dynamically
+    (.layers[0] | length) as $kb_len |
+
+    # 3. ── Sticky Keys (NEW Native Support) ──
+    # No need for unique_by(.name) since we already verified they don't exist
+    .stickyKeys = ((.stickyKeys // []) + [
+      {
+        "name": "&sticky_key_quickrel",
+        "description": "",
+        "releaseAfterMs": 500,
+        "quickRelease": true,
+        "lazy": false,
+        "ignoreModifiers": true,
+        "bindings": ["&kp"]
+      }
+    ]) |
+
+    # 4. ── Macros ──
+    .macros = ((.macros // []) + [
+      {
+        "name": "&sticky_key_oneshot",
+        "description": "",
+        "waitMs": 0,
+        "tapMs": 0,
+        "bindings": [
+          {"value": "&macro_tap"},
+          {"value": "&macro_param_1to1"},
+          {
+            "value": "&sticky_key_quickrel", 
+            "params": [{"value": "MACRO_PLACEHOLDER"}]
+          }
+        ]
+      }
+    ]) |
+
+    # 5. ── HoldTaps ──
+    .holdTaps = ((.holdTaps // []) + [
+      {
+        "name": "&sticky_key_modtap",
+        "description": "",
+        "flavor": "tap-preferred",
+        "tappingTermMs": 250,
+        "bindings": ["&kp", "&sticky_key_oneshot"]
+      }
+    ]) |
+
+    # 6. ── Layers ──
+    .layer_names = ((.layer_names // []) + ["OneShot_example"]) |
+    .layers = ((.layers // []) + [[
+      range($kb_len) |
+      
+      # Inject the key at index 46. 
+      if . == 46 then
+        {
+          "value": "&sticky_key_modtap",
+          "params": [{"value": "LSHFT"}, {"value": "LSHFT"}],
+          "decoration": {
+            "label": "Shift",
+            "icon": "fa-angle-double-up",
+            "background": "#ffecb3"
+          }
+        }
+      else
+        {"value": "&none"}
+      end
+    ]])
+  end
+)'''
+
+category = "Special keys"
+
+successMessage = "A OneShot Shift behavior, its macro and hold-tap, and an example 'OneShot_example' layer were added. Copy the example key from that layer onto your real Shift key to start using tap-to-capitalize."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["glove80", "go60"]
+icon = "✨"

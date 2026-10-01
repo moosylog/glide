@@ -9,7 +9,8 @@
     "test:e2e": "playwright test",
     "build:css": "tailwindcss -i core/styles/tailwind.input.css -o core/styles/tailwind.generated.css --minify -c tailwind.config.js",
     "build:bundle": "node scripts/bundleSingleFile.mjs",
-    "build:favicons": "node scripts/buildFavicons.mjs"
+    "build:favicons": "node scripts/buildFavicons.mjs",
+    "build:flows": "node scripts/buildFlowsIndex.mjs"
   },
   "devDependencies": {
     "@babel/core": "^8.0.6",
@@ -22,6 +23,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "sharp": "^0.35.5",
+    "smol-toml": "^1.9.0",
     "tailwindcss": "^3.4.19",
     "vitest": "^5.0.2"
   }

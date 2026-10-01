@@ -80,7 +80,6 @@
             isFlowCompatible,
             runJqScript,
             applyFlow,
-            BUILTIN_FLOWS_CATALOG,
             isTouchpadIndex,
             TOUCHPAD_LABEL_BY_INDEX,
             getTouchpadConfig,

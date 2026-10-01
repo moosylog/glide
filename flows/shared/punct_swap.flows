@@ -1,0 +1,144 @@
+uid = "punct_swap"
+
+title = "Programmer Punctuation Swap"
+
+subtitle = "Invert Semicolon, Quotes & F4"
+
+description = '''
+Swaps Shifted and unshifted punctuation the way programmers prefer — `:` instead of `;`, `"` instead of `'` — plus an optional double-tap on F4 to close windows.
+
+⚠️ Requires Tap-Dance and Mod-Morph support in the Layout Editor. Each part is optional — turn any of them off.'''
+
+script = '''
+# ZMK Autonomous Injection Script - Punctuation Swap & F4 Close
+
+# ==============================================================================
+# 1. BEHAVIOR DEFINITIONS
+# ==============================================================================
+
+def get_mm_semi: {
+  "name": "&mm_swap_semi",
+  "description": "Mod-Morph: Colon / Semicolon",
+  "cases": [
+    {
+      "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "SEMI"}]}] },
+      "mods": [],
+      "keepMods": []
+    },
+    {
+      "binding": { "value": "&kp", "params": [{"value": "SEMI"}] },
+      "mods": ["MOD_LSFT", "MOD_RSFT"],
+      "keepMods": []
+    }
+  ]
+};
+
+def get_mm_sqt: {
+  "name": "&mm_swap_sqt",
+  "description": "Mod-Morph: D-Quote / S-Quote",
+  "cases": [
+    {
+      "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "SQT"}]}] },
+      "mods": [],
+      "keepMods": []
+    },
+    {
+      "binding": { "value": "&kp", "params": [{"value": "SQT"}] },
+      "mods": ["MOD_LSFT", "MOD_RSFT"],
+      "keepMods": []
+    }
+  ]
+};
+
+def get_td_f4_close: {
+  "name": "&td_f4_close",
+  "description": "Tap-Dance: F4 / Alt+F4",
+  "tappingTermMs": 200,
+  "bindings": [
+    {
+      "value": "&kp",
+      "params": [{"value": "F4"}]
+    },
+    {
+      "value": "&kp",
+      "params": [{"value": "LA", "params": [{"value": "F4"}]}]
+    }
+  ]
+};
+
+# ==============================================================================
+# 2. MAIN TRANSFORMATION ENGINE
+# ==============================================================================
+
+(.keymap // .) |= (
+  
+  # Step 1: Inject Mod-Morph behaviors into AST if enabled by UI parameters
+  .modMorphs = (
+    (.modMorphs // []) 
+    + (if $swap_semi == "yes" then [get_mm_semi] else [] end)
+    + (if $swap_sqt == "yes" then [get_mm_sqt] else [] end)
+    | unique_by(.name)
+  ) |
+
+  # Step 2: Inject Tap-Dance behaviors into AST if enabled by UI parameters
+  .tapDances = (
+    (.tapDances // [])
+    + (if $td_f4 == "yes" then [get_td_f4_close] else [] end)
+    | unique_by(.name)
+  ) |
+
+  # Step 3: Auto-Assign on Base Layer (Layer 0)
+  (if (.layers | length > 0) then
+    
+    # Build a target map based on UI selections
+    (
+      (if $swap_semi == "yes" then { "SEMI": {"value": "&mm_swap_semi"} } else {} end) +
+      (if $swap_sqt == "yes"  then { "SQT":  {"value": "&mm_swap_sqt"} } else {} end) +
+      (if $td_f4 == "yes"     then { "F4":   {"value": "&td_f4_close"}  } else {} end)
+    ) as $map |
+    
+    # Iterate over the base layer keys
+    .layers[0] |= map(
+      if type == "object" and .value == "&kp" and .params and (.params | length > 0) and (.params[0].value | in($map)) then
+        # Replace the key with the mapped Behavior (0 parameters) and preserve decorations
+        $map[.params[0].value] + (if .decoration then {decoration: .decoration} else {} end)
+      else
+        .
+      end
+    )
+    
+  else . end)
+)'''
+
+category = "Symbols"
+
+successMessage = "Semicolon/colon and quote keys now swap on Shift as you chose, and F4 double-tap now closes the active window if you enabled it. Each toggle is independent — re-run to change your mind on any one of them."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "🔀"
+
+[[param]]
+id = "swap_semi"
+label = "Swap Semicolon / Colon"
+type = "select"
+options = ["yes", "no"]
+labels = ["Yes (Tap: Colon, Shift: Semicolon)", "No (Keep Default)"]
+default = "yes"
+
+[[param]]
+id = "swap_sqt"
+label = "Swap Single / Double Quotes"
+type = "select"
+options = ["yes", "no"]
+labels = ["Yes (Tap: Double, Shift: Single)", "No (Keep Default)"]
+default = "yes"
+
+[[param]]
+id = "td_f4"
+label = "F4 Double Tap to Close"
+type = "select"
+options = ["yes", "no"]
+labels = ["Yes (Tap: F4, Double Tap: Alt+F4)", "No (Keep Default)"]
+default = "yes"

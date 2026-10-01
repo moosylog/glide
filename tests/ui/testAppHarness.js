@@ -16,8 +16,22 @@ const CORE_SCRIPT_PATHS = [
   'core/io/layoutSchema.js', 'core/io/loadLayout.js', 'core/io/exportLayout.js',
   'core/capabilities/paramBinding.js', 'core/capabilities/catalogSchema.js',
   'core/capabilities/jqRunner.js', 'core/capabilities/applyFlow.js',
-  'core/capabilities/builtinCatalog.js',
 ];
+
+// Flows Automations' catalog is no longer a bundled JS array (core/capabilities/builtinCatalog.js
+// is gone) — glide.html now fetch()es it from flows/index.json at startup, same as a real browser
+// would from this same origin. Read it once from disk here and serve it from a stubbed
+// window.fetch, so every test gets the real, current catalog with no network involved. Anything
+// other than that one path falls through to the real global fetch (captured before it's
+// overwritten below — in jsdom, `window` and `globalThis` are the same object).
+const nativeFetch = globalThis.fetch;
+let flowsIndexJsonCache = null;
+function getFlowsIndexJson() {
+  if (flowsIndexJsonCache === null) {
+    flowsIndexJsonCache = readFileSync(path.join(repoRoot, 'flows', 'index.json'), 'utf8');
+  }
+  return flowsIndexJsonCache;
+}
 
 // GLIDE UI components (ui/*.js — see ARCHITECTURE.md's Stage 1 modularization entry). Mirrors
 // glide.html's own <script> tags: shared.js is plain JS, the rest are JSX and need Babel, and
@@ -77,6 +91,13 @@ export async function mountGlideApp() {
   };
   window.confirm = () => true;
   window.alert = () => {};
+  window.fetch = async (url, ...args) => {
+    if (url === 'flows/index.json') {
+      return { ok: true, status: 200, json: async () => JSON.parse(getFlowsIndexJson()) };
+    }
+    if (nativeFetch) return nativeFetch(url, ...args);
+    throw new Error(`fetch() not mocked for "${url}" and no native fetch is available in this environment`);
+  };
 
   for (const p of CORE_SCRIPT_PATHS) {
     const src = readFileSync(path.join(repoRoot, p), 'utf8');

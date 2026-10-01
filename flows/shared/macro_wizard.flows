@@ -1,0 +1,140 @@
+uid = "macro_wizard"
+
+title = "Macro Wizard"
+
+subtitle = "String Macro Generator"
+
+description = '''
+Turns any text you type into a ready-to-use macro, instead of clicking it together by hand in the editor.
+
+🚫 **Don't put passwords or personal information in your layout** — layout files have no private mode.'''
+
+script = '''
+# Map symbols to ZMK keycodes
+def zmk_sym($c):
+  if $c == " " then "SPACE"
+  elif $c == "!" then "EXCL"
+  elif $c == "@" then "AT"
+  elif $c == "#" then "HASH"
+  elif $c == "$" then "DLLR"
+  elif $c == "%" then "PRCNT"
+  elif $c == "^" then "CARET"
+  elif $c == "&" then "AMPS"
+  elif $c == "*" then "STAR"
+  elif $c == "(" then "LPAR"
+  elif $c == ")" then "RPAR"
+  elif $c == "-" then "MINUS"
+  elif $c == "_" then "UNDER"
+  elif $c == "=" then "EQUAL"
+  elif $c == "+" then "PLUS"
+  elif $c == "[" then "LBKT"
+  elif $c == "{" then "LBRC"
+  elif $c == "]" then "RBKT"
+  elif $c == "}" then "RBRC"
+  elif $c == "|" then "PIPE"
+  elif $c == ";" then "SEMI"
+  elif $c == ":" then "COLON"
+  elif $c == "'" then "SQT"
+  elif $c == "," then "COMMA"
+  elif $c == "<" then "LT"
+  elif $c == "." then "DOT"
+  elif $c == ">" then "GT"
+  elif $c == "/" then "FSLH"
+  elif $c == "?" then "QMARK"
+  elif $c == "`" then "GRAVE"
+  elif $c == "~" then "TILDE"
+  elif $c == "\\" then "BSLH"
+  elif $c == "\"" then "DQT"
+  else "NONE" end;
+
+# Generate the new macro object
+(
+  {
+    "name": "&\($macro_id)",
+    "description": "Print \"\($macro_string)\"",
+    "bindings": (
+      $macro_string | split("") | map(
+        . as $char |
+        if test("^[A-Z]$") then
+          [
+            { "value": "&macro_press" },
+            { "value": "&kp", "params": [ { "value": "LSHFT" } ] },
+            { "value": "&macro_tap" },
+            { "value": "&kp", "params": [ { "value": $char } ] },
+            { "value": "&macro_release" },
+            { "value": "&kp", "params": [ { "value": "LSHFT" } ] },
+            { "value": "&macro_tap" }
+          ]
+        elif test("^[a-z]$") then
+          [
+            {
+              "value": "&kp",
+              "params": [ { "value": ($char | ascii_upcase) } ]
+            }
+          ]
+        elif test("^[0-9]$") then
+          [
+            {
+              "value": "&kp",
+              "params": [ { "value": ("N" + $char) } ]
+            }
+          ]
+        else
+          [
+            {
+              "value": "&kp",
+              "params": [ { "value": zmk_sym($char) } ]
+            }
+          ]
+        end
+      ) | flatten
+    ),
+    "params": []
+  }
+) as $new_macro |
+
+"&\($macro_id)" as $macro_name |
+
+# Safely inject into the AST context (handles both flat and nested keymaps!)
+(.keymap // .) |= (
+  (.macros // []) as $existing_macros |
+  ($existing_macros | map(.name) | index($macro_name)) as $idx |
+
+  # Check if it exists, and validate overwrite flag
+  if $idx != null then
+    if $overwrite_macro then
+      .macros[$idx] = $new_macro
+    else
+      error("Macro '" + $macro_name + "' already exists! Check the 'Overwrite' box to replace it.")
+    end
+  else
+    .macros = $existing_macros + [$new_macro]
+  end
+)'''
+
+category = "Special keys"
+
+successMessage = "Your macro is ready — assign it to any key's binding by name to use it. Re-run any time with a different name or text; overwrite is on by default so you can iterate."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "🧙🏼‍♂️"
+
+[[param]]
+id = "macro_id"
+label = "Macro Name"
+type = "text"
+default = "flows_macro_string"
+
+[[param]]
+id = "macro_string"
+label = "Text to Type"
+type = "text"
+default = "Tr0ub4doR12@#$%"
+
+[[param]]
+id = "overwrite_macro"
+label = "Allow Macro Overwrite?"
+type = "boolean"
+default = true

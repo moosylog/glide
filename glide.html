@@ -229,7 +229,8 @@
          jqRunner.js's runJqScript already tolerates window.jq not existing yet either way. -->
     <script src="core/capabilities/jqRunner.js"></script>
     <script src="core/capabilities/applyFlow.js"></script>
-    <script src="core/capabilities/builtinCatalog.js"></script>
+    <!-- Flows Automations catalog is no longer bundled as JS (see flows/index.json, fetched at
+         runtime by glide.html) -- core/capabilities/builtinCatalog.js has been removed. -->
     <!-- GLIDE UI components (Stage 1 modularization — see ARCHITECTURE.md). shared.js and
          hooks.js are plain JS (no JSX), so they load as ordinary classic scripts like
          core/*.js; the rest are text/babel like the main app script below, and must load in
@@ -325,7 +326,6 @@ const { useState, useEffect, useMemo, useCallback, memo, useRef } = React;
             isFlowCompatible,
             runJqScript,
             applyFlow,
-            BUILTIN_FLOWS_CATALOG,
             isTouchpadIndex,
             TOUCHPAD_LABEL_BY_INDEX,
             getTouchpadConfig,
@@ -639,12 +639,24 @@ const App = () => {
 
             // Flows Automations (see core/capabilities/*.js, called "Flows" internally after
             // their github.com/moosylog/flows4json origin) — a browse-and-apply catalog that
-            // ships WITH GLIDE (core/capabilities/builtinCatalog.js), not fetched from a third
-            // party at runtime, so the catalog itself is static data, parsed once, with no
-            // loading state of its own. The jq-web *engine* it runs on is a different story (see
-            // jqEngineStatus below): its ~multi-MB wasm binary is no longer loaded upfront for
-            // everyone at startup, only the first time this feature is actually opened.
-            const allFlowsCatalog = useMemo(() => parseCatalog(BUILTIN_FLOWS_CATALOG).entries, []);
+            // ships WITH GLIDE as individual flows/<shared|glove80|go60>/*.flows files, each
+            // compiled into flows/index.json by `npm run build:flows` (scripts/buildFlowsIndex.mjs)
+            // so a flow can be added, changed, or removed without touching any core/ui JS file.
+            // Fetched once at startup from this same origin (flows/index.json sits next to
+            // glide.html), not from a third party — mirrors the jq engine's own lazy-load pattern
+            // below (jqEngineStatus), just eagerly rather than on first open, since the Flows modal
+            // and the command palette both need the catalog ready before they can render anything.
+            const [rawFlowsCatalog, setRawFlowsCatalog] = useState([]);
+            const [flowsCatalogStatus, setFlowsCatalogStatus] = useState('loading'); // 'loading' | 'ready' | 'error'
+            const loadFlowsCatalog = useCallback(() => {
+                setFlowsCatalogStatus('loading');
+                fetch('flows/index.json')
+                    .then((response) => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); })
+                    .then((rawJson) => { setRawFlowsCatalog(rawJson); setFlowsCatalogStatus('ready'); })
+                    .catch(() => { setFlowsCatalogStatus('error'); });
+            }, []);
+            useEffect(() => { loadFlowsCatalog(); }, [loadFlowsCatalog]);
+            const allFlowsCatalog = useMemo(() => parseCatalog(rawFlowsCatalog).entries, [rawFlowsCatalog]);
             // Only ever show automations that actually work on the loaded keyboard — a Go60
             // owner never needs to see (or dig past) Glove80-only entries, and vice versa.
             // Filtering here, once, rather than dimming incompatible cards in the modal, keeps
@@ -2173,6 +2185,8 @@ const App = () => {
                         results={flowResults}
                         engineStatus={jqEngineStatus}
                         onRetryEngine={ensureJqEngineLoaded}
+                        catalogStatus={flowsCatalogStatus}
+                        onRetryCatalog={loadFlowsCatalog}
                     />
 
                     <CommandPaletteModal
