@@ -96,7 +96,7 @@ script = '''
   end
 )'''
 
-category = "Special keys"
+category = "Smart Modifiers"
 
 successMessage = "A OneShot Shift behavior, its macro and hold-tap, and an example 'OneShot_example' layer were added. Copy the example key from that layer onto your real Shift key to start using tap-to-capitalize."
 

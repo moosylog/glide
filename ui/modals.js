@@ -153,9 +153,9 @@
         // screen. Picking an icon per category (rather than trusting each flow's own icon,
         // which is really about the individual automation) keeps the grid glanceable.
         const FLOW_CATEGORY_ICONS = {
-            'Home-Row Mods': '⌨️', 'Decorations & RGB': '💡', 'Special keys': '🎹', 'Autoshift': '⇪',
-            'Gaming': '🎮', 'macOS': '🍎', 'QWERTY Alternatives': '🔠', 'Mouse Controls': '🖱️',
-            'Symbols': '🔣',
+            'Smart Modifiers': '⌨️', 'Decorations & RGB': '💡', 'Keyboard Utilities': '🛠️',
+            'Operating System': '🖥️', 'Bundled Sets': '📦', 'Productivity Macros': '⚡',
+            'Gaming': '🎮', 'Typing Layouts': '🔠', 'Mouse Controls': '🖱️', 'Symbols': '🔣',
         };
 
         // A short "which keyboard(s)" label — shown on every list row and detail view so

@@ -145,7 +145,7 @@ def keyboards: {
   )
 )'''
 
-category = "QWERTY Alternatives"
+category = "Typing Layouts"
 
 successMessage = "Your base layer (and any alpha-heavy layer) now types the selected alternative layout. Gaming, Numbers, Navigation, Media, Keypad, Mouse, and Magic layers were left untouched, and thumb-key letters are yours to set by hand."
 

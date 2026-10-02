@@ -66,7 +66,7 @@ script = '''
   )
 )'''
 
-category = "Special keys"
+category = "Productivity Macros"
 
 successMessage = "A new &AppSwitch macro is ready — assign it to any key or combo in the Layout Editor for one-press Alt-Tab/Cmd-Tab switching."
 

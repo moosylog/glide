@@ -117,7 +117,7 @@ else . end) |
   else . end)
 )'''
 
-category = "Special keys"
+category = "Bundled Sets"
 
 successMessage = "The 15 community hold-tap/mod-morph/tap-dance behaviors are now available. If you chose \"Implement on layer0\", your base layer's Backspace, Space, and punctuation keys were automatically upgraded to use them — otherwise, assign the new behaviors to keys yourself."
 

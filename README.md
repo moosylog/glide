@@ -36,9 +36,9 @@ file for exactly that case.
 - **Advanced ZMK behaviors** built in their own editors, not raw JSON: macros, hold-taps,
   sticky keys, mod-morphs, tap-dances, and combos (with live conflict detection).
 - **Flows Automations** — a built-in library of one-click layout transforms (33 automations
-  across categories like Home-Row Mods, Autoshift, Gaming, macOS remapping, Decorations & RGB,
-  Mouse Controls, and international Symbol layouts), each scoped to the board it's compatible
-  with.
+  across categories like Smart Modifiers, Typing Layouts, Operating System, Productivity Macros,
+  Gaming, Decorations & RGB, Mouse Controls, and international Symbol layouts), each scoped to
+  the board it's compatible with.
 - **Go60 trackpad support** — configure and swap the Cirque trackpads' click/scroll behavior.
 - **Undo/redo and garbage collection** — deleted bindings clean up their own now-unused custom
   behaviors instead of leaving orphaned definitions behind.

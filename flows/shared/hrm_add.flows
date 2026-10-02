@@ -218,7 +218,7 @@ def GetHardware:
   ]
 )'''
 
-category = "Home-Row Mods"
+category = "Smart Modifiers"
 
 successMessage = "Home-row mods are live on your base layer. Tap a home-row key for its letter, hold it for the modifier. Give the new hold-tap timing a few days to feel natural — you can retune it per key under that key's Settings if it feels off."
 

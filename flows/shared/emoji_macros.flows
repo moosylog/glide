@@ -220,7 +220,7 @@ script = '''
   )
 )'''
 
-category = "Special keys"
+category = "Productivity Macros"
 
 successMessage = "A 40-emoji layer is ready — assign a layer switch key to reach it. Make sure your OS's Unicode hex input is enabled first (WinCompose on Windows, Unicode Hex Input on macOS, IBus on Linux), or the emojis won't type correctly."
 

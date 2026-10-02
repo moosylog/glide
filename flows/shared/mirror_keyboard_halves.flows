@@ -88,7 +88,7 @@ def build_lookup(left; right; size):
   )
 )'''
 
-category = "Special keys"
+category = "Typing Layouts"
 
 successMessage = "The layer you selected has had its left and right halves mirrored using your chosen swap style. Pick a different layer or style and re-run any time — only that one layer is touched."
 

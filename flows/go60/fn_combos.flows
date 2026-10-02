@@ -77,7 +77,7 @@ script = '''
   end
 )'''
 
-category = "Special keys"
+category = "Keyboard Utilities"
 
 successMessage = "F1–F12 are now available: press a number-row key together with the key directly below it (e.g. 1 + Q for F1)."
 

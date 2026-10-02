@@ -20,10 +20,11 @@ const openFlowsAutomations = async () => { await click(byTitle('Flows Automation
 // collides with a flow row's title element (see clickCapability below).
 const clickCategory = (name) => click(qa('.font-bold.text-sm.text-app-text.leading-tight').find((el) => el.textContent.trim() === name));
 
-// A catalog category header can legitimately share text with a flow's own title (e.g. hrm_add
-// itself is filed under a "Home-Row Mods" category) — byText('div', title) would then match the
+// A catalog category header could in principle share text with a flow's own title (a category
+// and a flow landing on the exact same string) — byText('div', title) would then match the
 // (non-clickable) category header first, since it renders earlier in the DOM. This targets the
-// list row's own title element specifically.
+// list row's own title element specifically, defensively, even though no current category name
+// happens to collide with a flow title.
 const clickCapability = (title) => click(qa('.font-bold.text-app-text.truncate').find((el) => el.textContent.trim() === title));
 
 beforeAll(async () => {
@@ -52,8 +53,8 @@ describe('Flows Automations modal', () => {
     it('opens from the toolbar into an app-store-style grid of categories, not a flat list', async () => {
         await openFlowsAutomations();
         expect(document.body.textContent).toContain('Flows Automations');
-        expect(document.body.textContent).toContain('Home-Row Mods');
-        expect(document.body.textContent).toContain('Special keys');
+        expect(document.body.textContent).toContain('Smart Modifiers');
+        expect(document.body.textContent).toContain('Keyboard Utilities');
         expect(document.body.textContent).toContain('Decorations & RGB');
         // Category tiles show a count, not the individual automations yet.
         expect(document.body.textContent).toMatch(/automation/);
@@ -62,7 +63,7 @@ describe('Flows Automations modal', () => {
 
     it('drills into a category to see its automations, then into one for its detail view', async () => {
         await openFlowsAutomations();
-        await clickCategory('Special keys');
+        await clickCategory('Keyboard Utilities');
         expect(document.body.textContent).toContain('Function keys on Go60');
         await clickCapability('Function keys on Go60');
         expect(document.body.textContent).toContain('Adds Fn Key Combos');
@@ -100,11 +101,11 @@ describe('Flows Automations modal', () => {
     it('search also matches a flow\'s description, not just its title/subtitle/category', async () => {
         await openFlowsAutomations();
         const input = q('input[placeholder="Search Flows Automations..."]');
-        // "letters" appears only in Home-Row Mods' own description ("...act as normal letters when
-        // tapped, and as modifier keys when held") — nowhere in its title ("Home-Row Mods"),
-        // subtitle ("Adds Home-Row Modifiers"), or category ("Home-Row Mods"). If this only matched
-        // title/subtitle/category (the pre-fix behavior), this query would come up empty.
-        await typeInto(input, 'letters');
+        // "pinkies" appears only in Home-Row Mods' own description ("...so your pinkies don't have
+        // to stretch for those keys") — nowhere in its title ("Home-Row Mods"), subtitle, or
+        // category ("Smart Modifiers"). If this only matched title/subtitle/category (the pre-fix
+        // behavior), this query would come up empty.
+        await typeInto(input, 'pinkies');
         expect(document.body.textContent).toContain('Home-Row Mods');
         expect(document.body.textContent).not.toContain('No Flows Automations match your search');
     });
@@ -123,7 +124,7 @@ describe('Flows Automations modal', () => {
 
     it('applies a param-free real automation (Fn_combos) end to end and shows a success result box with its custom message', async () => {
         await openFlowsAutomations();
-        await clickCategory('Special keys');
+        await clickCategory('Keyboard Utilities');
         await clickCapability('Function keys on Go60');
         await click(byText('button', 'Apply to Layout'));
         await delay(300);
@@ -144,7 +145,7 @@ describe('Flows Automations modal', () => {
         // miss once the description/param form pushes the result box down) — not discoverable.
         // Done/Back now sit right next to the result the user is looking at.
         await openFlowsAutomations();
-        await clickCategory('Special keys');
+        await clickCategory('Keyboard Utilities');
         await clickCapability('Function keys on Go60');
         expect(byText('button', 'Done')).toBeFalsy(); // not shown before a result exists
         await click(byText('button', 'Apply to Layout'));
@@ -152,7 +153,7 @@ describe('Flows Automations modal', () => {
         expect(document.body.textContent).toContain('Success');
         const doneBtn = byText('button', 'Done');
         expect(doneBtn).toBeTruthy();
-        expect(byText('button', '← Back to Special keys')).toBeTruthy();
+        expect(byText('button', '← Back to Keyboard Utilities')).toBeTruthy();
 
         await click(doneBtn);
         expect(q('.fixed.inset-0.z-50')).toBeFalsy(); // Done closes the whole modal
@@ -160,7 +161,7 @@ describe('Flows Automations modal', () => {
 
     it('applies the real Home-Row Mods flow without the "Cannot iterate over null" crash', async () => {
         await openFlowsAutomations();
-        await clickCategory('Home-Row Mods');
+        await clickCategory('Smart Modifiers');
         await clickCapability('Home-Row Mods'); // hrm_add's own title
         await click(byText('button', 'Apply to Layout'));
         await delay(300);
@@ -170,7 +171,7 @@ describe('Flows Automations modal', () => {
 
     it('running the same automation twice updates its own result box each time, not a growing log', async () => {
         await openFlowsAutomations();
-        await clickCategory('Home-Row Mods');
+        await clickCategory('Smart Modifiers');
         await clickCapability('Home-Row Mods');
         await click(byText('button', 'Apply to Layout'));
         await delay(300);
@@ -199,15 +200,15 @@ describe('Flows Automations modal', () => {
 
     it('shows every category from the full catalog, including the newly-added ones', async () => {
         await openFlowsAutomations();
-        expect(document.body.textContent).toContain('macOS');
-        expect(document.body.textContent).toContain('QWERTY Alternatives');
-        expect(document.body.textContent).toContain('Autoshift');
+        expect(document.body.textContent).toContain('Operating System');
+        expect(document.body.textContent).toContain('Typing Layouts');
+        expect(document.body.textContent).toContain('Smart Modifiers');
         expect(document.body.textContent).toContain('Gaming');
     });
 
     it('applies the real macOS/Windows modifier remapper (os_remap), a param-free automation with no dedicated category icon needed beyond its own', async () => {
         await openFlowsAutomations();
-        await clickCategory('macOS');
+        await clickCategory('Operating System');
         await clickCapability('🍏 Remap to/from macOS');
         expect(document.body.textContent).toContain('Shared'); // hardware badge, unrestricted
         await click(byText('button', 'Apply to Layout'));
@@ -218,7 +219,7 @@ describe('Flows Automations modal', () => {
 
     it('applies the real Alternative Layouts automation, which declares a real select param bound to the jq script', async () => {
         await openFlowsAutomations();
-        await clickCategory('QWERTY Alternatives');
+        await clickCategory('Typing Layouts');
         await clickCapability('Alternative Layouts');
         // FlowParamForm renders a real <select> for this param (defaulting to colemak-dh) —
         // just confirm it's there and apply with that default, same as a user who doesn't touch it.
@@ -256,7 +257,10 @@ describe('Flows Automations modal', () => {
         expect(document.body.textContent).toContain('Gaming Layer 80');
         expect(document.body.textContent).not.toContain('Gaming Layer 60'); // go60-only, hidden on glove80
         await click(byText('button', '← All categories'));
-        await clickCategory('Special keys');
-        expect(document.body.textContent).not.toContain('Function keys on Go60'); // go60-only, hidden on glove80
+        // Keyboard Utilities' only entry (Function keys on Go60) is go60-only -- on a glove80
+        // layout the category has zero compatible flows, so per the filter-before-the-modal
+        // design, the whole category tile disappears rather than appearing empty.
+        expect(document.body.textContent).not.toContain('Keyboard Utilities');
+        expect(document.body.textContent).not.toContain('Function keys on Go60');
     });
 });

@@ -67,11 +67,11 @@ describe('Command palette', () => {
 
   it('matches a hyphenated catalog title against an unhyphenated query, in both directions', async () => {
     // Found by actually looking at this in a real browser, not by the jsdom suite: the catalog's
-    // own Home-Row Mods flow is hyphenated throughout (title "Home-Row Mods", category "Home-Row
-    // Mods", description "...home-row keys do two things..."), but the exact phrase from GLIDE's
-    // own pitch copy ("I want Home-Row Mods") and how anyone would actually type it ("home row
-    // mods") has no hyphen at all. A plain substring match never finds it. See normalizeForSearch
-    // in ui/modals.js.
+    // own Home-Row Mods flow is hyphenated throughout (title "Home-Row Mods", description
+    // "...home-row keys do two things..."), but the exact phrase from GLIDE's own pitch copy
+    // ("I want Home-Row Mods") and how anyone would actually type it ("home row mods") has no
+    // hyphen at all. A plain substring match never finds it. See normalizeForSearch in
+    // ui/modals.js.
     await openPalette();
     await typeInto(paletteInput(), 'home row mods');
     expect(document.body.textContent).toContain('Home-Row Mods');

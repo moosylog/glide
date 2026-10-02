@@ -129,7 +129,7 @@ if (type != "object") then . else
   )
 end'''
 
-category = "Home-Row Mods"
+category = "Smart Modifiers"
 
 successMessage = "All home-row mods — hold-taps, macros, and any bilateral finger layers — have been removed from your layout. Your base layer types plain letters again."
 

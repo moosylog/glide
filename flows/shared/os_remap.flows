@@ -67,7 +67,7 @@ get_replacements as $r |
 for_every_binding(pass_1_exception) |
 for_every_binding(pass_2_swap($r))'''
 
-category = "macOS"
+category = "Operating System"
 
 successMessage = "Ctrl and Cmd/GUI (including LC()/LG()/RC()/RG() combinations) have been swapped across every layer — familiar shortcuts like Copy, Paste, Undo and Redo now land on the same physical key regardless of which OS you're on. Run it again to swap back."
 

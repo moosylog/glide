@@ -87,7 +87,7 @@ script = '''
   .layer_names += ["AI_Control"] | .layers += [$ai_keys]
 )'''
 
-category = "Special keys"
+category = "Productivity Macros"
 
 successMessage = "A new AI_Control layer and its macros were added, along with matching Lower-layer navigation bindings and the sticky-key behaviors they need. Assign a key to switch to AI_Control to start using it."
 

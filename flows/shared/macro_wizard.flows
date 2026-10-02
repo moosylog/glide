@@ -112,7 +112,7 @@ def zmk_sym($c):
   end
 )'''
 
-category = "Special keys"
+category = "Productivity Macros"
 
 successMessage = "Your macro is ready — assign it to any key's binding by name to use it. Re-run any time with a different name or text; overwrite is on by default so you can iterate."
 

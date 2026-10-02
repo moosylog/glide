@@ -134,7 +134,7 @@ script = '''
   else . end)
 )'''
 
-category = "Special keys"
+category = "Productivity Macros"
 
 successMessage = "A new 'Flows_Nav' layer and the mod_tab_chord_v2_TKZ behavior were added. Assign that behavior to a key, set its layer parameter to Flows_Nav, and its modifier to LCTRL (macOS) or LALT/LGUI (Windows)."
 
