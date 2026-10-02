@@ -35,7 +35,7 @@ describe('runGC', () => {
 
   it('follows nested references transitively (a used tap-dance keeps its referenced holdTap alive)', () => {
     const htName = `${GLIDE_HT_PREFIX}mo_a`;
-    const tdName = '&GLIDE_td_x_y';
+    const tdName = '&GLD_td_x_y';
     const config = {
       layers: [[{ value: tdName }]],
       tapDances: [{ name: tdName, bindings: [{ value: htName, params: [{ value: 1 }] }, { value: '&kp', params: [{ value: 'B' }] }] }],

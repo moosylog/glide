@@ -32,8 +32,8 @@ describe('shiftLayerPointers — native layer-pointer bindings', () => {
 describe('shiftLayerPointers — REGRESSION: layer index nested inside a custom holdTap', () => {
   it('remaps the layer index flattened onto the outer binding when the holdTap wraps a layer-pointer hold', () => {
     const config = {
-      layers: [[{ value: '&GLIDE_ht_mo_customtap', params: [{ value: 3 }] }]],
-      holdTaps: [{ name: '&GLIDE_ht_mo_customtap', bindings: ['&mo', '&some_custom_behavior'] }],
+      layers: [[{ value: '&GLD_ht_mo_customtap', params: [{ value: 3 }] }]],
+      holdTaps: [{ name: '&GLD_ht_mo_customtap', bindings: ['&mo', '&some_custom_behavior'] }],
     };
     shiftLayerPointers(config, 'delete', 1);
     expect(config.layers[0][0].params[0].value).toBe(2);
@@ -41,8 +41,8 @@ describe('shiftLayerPointers — REGRESSION: layer index nested inside a custom 
 
   it('does NOT touch a custom holdTap whose hold side is not a layer pointer (no false positives)', () => {
     const config = {
-      layers: [[{ value: '&GLIDE_ht_lsft_a', params: [{ value: 5 }] }]],
-      holdTaps: [{ name: '&GLIDE_ht_lsft_a', bindings: ['LSHFT', '&kp'] }],
+      layers: [[{ value: '&GLD_ht_lsft_a', params: [{ value: 5 }] }]],
+      holdTaps: [{ name: '&GLD_ht_lsft_a', bindings: ['LSHFT', '&kp'] }],
     };
     shiftLayerPointers(config, 'delete', 1);
     // 5 is not a layer index here (LSHFT isn't a layer pointer) — must be left alone.
@@ -50,20 +50,20 @@ describe('shiftLayerPointers — REGRESSION: layer index nested inside a custom 
   });
 
   it('recurses into mod-morph cases and tap-dance bindings, deduping shared definitions so they are not double-shifted', () => {
-    const sharedHoldTap = { name: '&GLIDE_ht_mo_x', bindings: ['&mo', '&x'] };
+    const sharedHoldTap = { name: '&GLD_ht_mo_x', bindings: ['&mo', '&x'] };
     const config = {
       layers: [
         [
-          { value: '&GLIDE_mm_a_b', params: [] },
-          { value: '&GLIDE_ht_mo_x', params: [{ value: 5 }] },
+          { value: '&GLD_mm_a_b', params: [] },
+          { value: '&GLD_ht_mo_x', params: [{ value: 5 }] },
         ],
       ],
       modMorphs: [
         {
-          name: '&GLIDE_mm_a_b',
+          name: '&GLD_mm_a_b',
           cases: [
             { binding: { value: '&kp', params: [{ value: 'A' }] } },
-            { binding: { value: '&GLIDE_ht_mo_x', params: [{ value: 5 }] } },
+            { binding: { value: '&GLD_ht_mo_x', params: [{ value: 5 }] } },
           ],
         },
       ],

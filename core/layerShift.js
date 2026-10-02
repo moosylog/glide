@@ -23,7 +23,7 @@
             };
 
             // Remaps the layer index on a binding that IS a layer-pointer (&mo/&lt/etc directly),
-            // or that WRAPS one — e.g. a synthesized &GLIDE_ht_* hold-tap whose hold-side is a layer
+            // or that WRAPS one — e.g. a synthesized &GLD_ht_* hold-tap whose hold-side is a layer
             // pointer, where GLIDE always flattens the hold's param onto this outer binding's
             // params[0]. Without this second case, a layer delete/move/insert silently leaves the
             // embedded index stale whenever the tap-side isn't a plain &kp (so it never collapsed

@@ -2,7 +2,7 @@
 //
 // Real gap found by auditing "can auto-generated behaviors be edited from the Behavior Library,
 // and should they be?": the per-key inspector already protects a GLIDE-owned behavior
-// (&GLIDE_ht_.../&GLIDE_mm_.../&GLIDE_td_..., see core/zmk/naming.js) by cloning a shared one
+// (&GLD_ht_.../&GLD_mm_.../&GLD_td_..., see core/zmk/naming.js) by cloning a shared one
 // before letting it be tweaked (tests/ui/detachCustomize.test.js) — but the standalone Behavior
 // Library sidebar had NO protection at all. Clicking one of these rows opened its builder modal
 // exactly like any hand-made behavior; the only hint anything was different was a plain
@@ -34,7 +34,7 @@ describe('Behavior Library: warning before editing a GLIDE-owned behavior', () =
   });
 
   it('a GLIDE-owned hold-tap (created via Detach & Customize) asks for confirmation first, and Cancel leaves it closed', async () => {
-    // Produce a real &GLIDE_ht_detached_... record the same way a user would — via the per-key
+    // Produce a real &GLD_ht_detached_... record the same way a user would — via the per-key
     // inspector's Detach & Customize flow (tests/ui/detachCustomize.test.js) — rather than
     // hand-crafting one, so this proves the real, GLIDE-generated shape triggers the guard.
     await click(keyEl(10));

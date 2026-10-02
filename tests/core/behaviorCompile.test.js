@@ -57,7 +57,7 @@ describe('behaviors/compile — coercing raw widget input against a schema', () 
   it('compileBehaviorProperties round-trips a real GLIDE-synthesized holdTap object unchanged', () => {
     // Exactly the shape core/slots.js's makeHoldTap produces for a new behavior.
     const real = {
-      name: '&GLIDE_ht_N1_F4', description: 'x', bindings: [{ value: '&kp' }, { value: '&kp' }],
+      name: '&GLD_ht_N1_F4', description: 'x', bindings: [{ value: '&kp' }, { value: '&kp' }],
       tappingTermMs: 200, flavor: 'tap-preferred', quickTapMs: -1, requirePriorIdleMs: 0,
       retroTap: false, holdTriggerOnRelease: false,
     };

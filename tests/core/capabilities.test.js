@@ -316,7 +316,7 @@ describe('capabilities/builtinCatalog — every Flows Automation shipped WITH GL
             'hrm_bil60', 'hrm_bil80', 'hrm_remove', 'symbols2_gb_mac', 'macro_wizard',
             'mirror_keyboard_halves',
             'mouse_emulation', 'os_remap', 'punct_swap', 'auto_decorate', 'symbols2_se',
-            'symbols2_se_mac', 'oneshot_modifier', 'mouse_swap_trackpads', 'sym_numrow_v1',
+            'symbols2_se_mac', 'oneshot_modifier', 'mouse_swap_trackpads',
             'sym_numrow_v2', 'top_15_zmk_behaviors',
         ].sort());
         expect(uids).not.toContain('colors_launch_kiilix'); // launcher-only, no script

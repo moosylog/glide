@@ -423,7 +423,7 @@ const { useState, useEffect, useMemo, useCallback, memo, useRef } = React;
 
 
         // GLIDE's naming convention for behaviors it generates. The "ht"/"mm"/"td" segment is kept
-        // immediately after GLIDE_ (rather than a fully flat &GLIDE_<ids>) because two different
+        // immediately after GLD_ (rather than a fully flat &GLD_<ids>) because two different
         // behavior kinds can compute the same identifier suffix from unrelated keys (e.g. a hold-tap
         // of hold=N1/tap=F4 and a mod-morph of tap=N1/shiftTap=F4 both reduce to "N1_F4") — behavior
         // names must be globally unique in the exported ZMK devicetree, so without a type marker two
@@ -1775,7 +1775,7 @@ const App = () => {
 
             // Guards opening a Hold-Tap/Mod-Morph/Tap-Dance from the Behavior Library sidebar
             // (as opposed to the per-key inspector's inline editor) when that behavior is one of
-            // GLIDE's own auto-generated ones (&GLIDE_ht_.../&GLIDE_mm_.../&GLIDE_td_... — see
+            // GLIDE's own auto-generated ones (&GLD_ht_.../&GLD_mm_.../&GLD_td_... — see
             // core/zmk/naming.js). The per-key inspector already has real protection for this
             // (detachCustomBehavior clones a shared one before editing), but the Behavior Library
             // had none at all: clicking a GLIDE-generated behavior here opened its builder exactly

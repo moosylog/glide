@@ -23,7 +23,7 @@ describe('Detach & Customize', () => {
 
     const key10After = await readCurrentBindingJson();
     expect(key10After.value).not.toBe('&strong');
-    expect(key10After.value).toMatch(/^&GLIDE_ht_detached_/);
+    expect(key10After.value).toMatch(/^&GLD_ht_detached_/);
 
     // Key 21 must be completely untouched.
     await click(keyEl(21));
