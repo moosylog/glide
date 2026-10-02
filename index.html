@@ -1531,7 +1531,7 @@ const App = () => {
                 }
                 if (slotKey === 'doubleTap' && isRecognizedTdName(currentBinding?.value)) rawBindingName = currentBinding.value;
 
-                const showGear = isFilled && (slotKey === 'hold' || slotKey === 'doubleTap' || !['&kp', '&mt', '&lt', '&trans', '&none', '&magic'].includes(slotBinding.value));
+                const showGear = isFilled && (slotKey === 'hold' || slotKey === 'doubleTap' || !['&kp', '&mt', '&lt', '&trans', '&none', '&magic', '&lower'].includes(slotBinding.value));
                 const isCustomBehavior = isFilled && !isGlideNativeBindingValue(slotBinding.value);
                 const usageCount = isCustomBehavior ? countBehaviorUsage(config, slotBinding.value) : 0;
                 const behaviorCategory = isCustomBehavior ? findBehaviorCategory(config, slotBinding.value) : null;
