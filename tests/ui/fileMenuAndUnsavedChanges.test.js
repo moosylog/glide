@@ -36,6 +36,21 @@ describe('Top bar and unsaved-changes protection', () => {
     expect(document.body.textContent).toContain('Blank Go60 layout');
   });
 
+  it('the New dropdown is viewport-fixed rather than absolutely positioned inside the scrollable button cluster (regression: it used to grow that cluster\'s own scrollable width, popping a spurious horizontal scrollbar and pushing the menu itself off-screen, unreachable)', async () => {
+    await click(byTitle('Start a new blank layout'));
+    const panel = byText('div', 'Start blank').parentElement;
+    // `fixed` elements don't contribute to any ancestor's scrollable overflow regardless of
+    // where they sit in the DOM tree — unlike `absolute`, which (when its containing block is
+    // nested inside the New/Import/Export/Undo/Redo cluster's own `overflow-x-auto`, as it used
+    // to be here) *does* grow that cluster's scrollable width the moment the panel is wider than
+    // the remaining space. `fixed` + explicit left/top (computed from the button's own screen
+    // position when opened) is what keeps the panel from doing that.
+    expect(panel.className).toContain('fixed');
+    expect(panel.className).not.toContain('absolute');
+    expect(panel.style.left).toBeTruthy();
+    expect(panel.style.top).toBeTruthy();
+  });
+
   it('marks the layout dirty after an edit — shown as a dot next to the layout name and on the tab title', async () => {
     expect(document.title.startsWith('•')).toBe(false);
     await click(keyEl(20));

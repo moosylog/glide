@@ -4,11 +4,15 @@
 // Automations buttons — the always-visible header above the canvas/sidebar/inspector. Purely
 // presentational: every value and handler it needs comes in as a prop, and it owns no state of
 // its own (New's own open/closed dropdown state, `showNewMenu`, stays in App since App also
-// needs it to render the backdrop-catching overlay — see the `showNewMenu` prop below). Second
-// step of Stage 3's planned least-coupled-first JSX split (see ARCHITECTURE.md §7 and
+// needs it to render the backdrop-catching overlay — see the `showNewMenu` prop below), with one
+// exception: `newMenuPos`, the dropdown's own screen coordinates, is purely a rendering detail of
+// this component (see the button cluster's overflow-x-auto comment below for why it has to be
+// computed rather than left to plain CSS `absolute` positioning).
+// Second step of Stage 3's planned least-coupled-first JSX split (see ARCHITECTURE.md §7 and
 // README.md's "Status" section) — extracted verbatim from glide.html's `App`, behavior
 // unchanged, only the file it lives in.
 (function () {
+    const { useState, useRef } = React;
     const TopBar = ({
         config,
         layoutName,
@@ -28,6 +32,17 @@
         setShowCommandPalette,
         ensureJqEngineLoaded,
     }) => {
+        const newButtonRef = useRef(null);
+        const [newMenuPos, setNewMenuPos] = useState(null);
+        const toggleNewMenu = () => {
+            if (!showNewMenu && newButtonRef.current) {
+                const rect = newButtonRef.current.getBoundingClientRect();
+                const menuWidth = 224; // w-56
+                const left = Math.min(rect.left, window.innerWidth - menuWidth - 8);
+                setNewMenuPos({ left: Math.max(left, 8), top: rect.bottom + 8 });
+            }
+            setShowNewMenu((v) => !v);
+        };
         return (
             <header className="h-14 shrink-0 flex items-center justify-between gap-2 sm:gap-4 px-3 sm:px-4 border-b border-app-borderHighlight bg-app-sidebar z-40 relative" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
@@ -58,15 +73,26 @@
                     // icon-only below `sm` so scrolling is rarely needed on an ordinary phone
                     // width; it's a fallback for very narrow screens, not the primary fix.
                     <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 overflow-x-auto">
-                        <div className="relative shrink-0">
+                        <div className="shrink-0" ref={newButtonRef}>
                             {showNewMenu && <div className="fixed inset-0 z-40" onClick={() => setShowNewMenu(false)}></div>}
-                            <button onClick={() => setShowNewMenu((v) => !v)} disabled={isFetchingTemplate} className="flex items-center gap-x-1.5 px-2 sm:px-3 py-1.5 rounded-xl text-xs font-bold text-app-text hover:bg-white/10 transition-all disabled:opacity-40" title="Start a new blank layout">
+                            <button onClick={toggleNewMenu} disabled={isFetchingTemplate} className="flex items-center gap-x-1.5 px-2 sm:px-3 py-1.5 rounded-xl text-xs font-bold text-app-text hover:bg-white/10 transition-all disabled:opacity-40" title="Start a new blank layout">
                                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
                                 <span className="hidden sm:inline">New</span>
                                 <svg className="w-3 h-3 opacity-60 hidden sm:inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                             </button>
-                            {showNewMenu && (
-                                <div className="absolute left-0 top-full mt-2 w-56 bg-app-surface border border-app-borderHighlight rounded-xl shadow-2xl z-50 p-1.5" onClick={(e) => e.stopPropagation()}>
+                            {/* `fixed` (viewport-anchored, via newMenuPos computed on open) rather
+                                than `absolute` inside the button cluster on purpose: that cluster
+                                is horizontally scrollable (see its own overflow-x-auto comment
+                                above) for very narrow screens, and an `absolute` child wider than
+                                the remaining space would grow as a *scrollable child* adds to that
+                                row's own scrollable width — so opening this menu made a spurious
+                                horizontal scrollbar appear across the whole New/Import/Export/
+                                Undo/Redo cluster, with the menu itself landing off-screen to the
+                                right of it, unreachable without first discovering and using that
+                                scrollbar. `fixed` positioning isn't inside anyone's scrollable
+                                content, so it can't do that. */}
+                            {showNewMenu && newMenuPos && (
+                                <div className="fixed w-56 bg-app-surface border border-app-borderHighlight rounded-xl shadow-2xl z-50 p-1.5" style={{ left: `${newMenuPos.left}px`, top: `${newMenuPos.top}px` }} onClick={(e) => e.stopPropagation()}>
                                     <div className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-app-textMuted font-bold">Start blank</div>
                                     <button onClick={() => { fetchTemplate('glove80'); setShowNewMenu(false); }} disabled={isFetchingTemplate} className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold hover:bg-white/10 transition-colors disabled:opacity-40">Blank Glove80 layout</button>
                                     <button onClick={() => { fetchTemplate('go60'); setShowNewMenu(false); }} disabled={isFetchingTemplate} className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold hover:bg-white/10 transition-colors disabled:opacity-40">Blank Go60 layout</button>
