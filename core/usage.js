@@ -46,7 +46,7 @@
         // behavior that must go through "Detach & Customize" before the slot model can rewrite it.
         const isGlideNativeBindingValue = (val) => {
             if (!val) return true;
-            const NATIVE = ['&kp', '&mt', '&lt', '&trans', '&none', '&magic', '&mo', '&to', '&tog', '&sl', '&layer', '&bt', '&out', '&rgb_ug', '&ext_power', '&sk', 'Custom'];
+            const NATIVE = ['&kp', '&mt', '&lt', '&trans', '&none', '&magic', '&lower', '&mo', '&to', '&tog', '&sl', '&layer', '&bt', '&out', '&rgb_ug', '&ext_power', '&sk', 'Custom'];
             if (NATIVE.includes(val)) return true;
             return isGlideHtName(val) || isGlideMmName(val) || isRecognizedTdName(val);
         };

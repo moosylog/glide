@@ -31,7 +31,7 @@
     } = window.GlideCore;
     const { searchAcrossAllPalette, ALL_PALETTE_SECTIONS, KEY_COLOR_PRESETS } = window.GlideUI;
 
-    const SLOT_LABELS = { tap: 'Primary Action', shiftTap: 'Shift Action', hold: 'Hold Action', doubleTap: 'Double-Tap Action', label: 'Custom Key Text' };
+    const SLOT_LABELS = { tap: 'Tap Action', shiftTap: 'Shift Action', hold: 'Hold Action', doubleTap: 'Double-Tap Action', label: 'Custom Key Text' };
     const SLOT_LINK_LABELS = { shiftTap: 'when tapped with Shift', hold: 'when held', doubleTap: 'when double-tapped', label: 'add text label to the key' };
 
     const MOD_BASES = [

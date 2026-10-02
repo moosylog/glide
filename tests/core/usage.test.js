@@ -16,6 +16,16 @@ describe('isGlideNativeBindingValue', () => {
     });
   });
 
+  it('treats MoErgo\'s own proprietary behaviors (&magic, &lower, &layer) as native, not a hand-authored custom behavior', () => {
+    // Real codes seen in actual MoErgo exports (tests/fixtures/tynstar.json and
+    // go60-touchpads.json use all three). &lower used to be missing from this list, which made
+    // the inspector show it with the generic "Custom" badge and offer "Detach & Customize" —
+    // nonsensical for a fixed MoErgo primitive with zero params, same as &magic.
+    ['&magic', '&lower', '&layer'].forEach((v) => {
+      expect(isGlideNativeBindingValue(v)).toBe(true);
+    });
+  });
+
   it('treats a GLIDE-synthesized name as native', () => {
     expect(isGlideNativeBindingValue(`${GLIDE_HT_PREFIX}mo_a`)).toBe(true);
   });

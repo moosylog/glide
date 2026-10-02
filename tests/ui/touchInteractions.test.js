@@ -42,7 +42,7 @@ describe('Touch drag-to-swap on the canvas', () => {
     await pointerEvent(document, 'pointerup', { pointerId: 8, pointerType: 'touch', clientX: 50, clientY: 50 });
     restore();
     await click(keyEl(3)); // the real tap gesture also fires a click after pointerup
-    expect(document.body.textContent).toContain('Primary Action');
+    expect(document.body.textContent).toContain('Tap Action');
   });
 });
 

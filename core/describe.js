@@ -57,6 +57,7 @@
             if (val === '&bt') return `Bluetooth: ${p1} ${p2 ?? ''}`; if (val === '&out') return `Output: ${p1}`; if (val === '&rgb_ug') return `RGB: ${p1}`;
            
             if (val === '&magic') return `Magic Action`;
+            if (val === '&lower') return `Lower Action`;
             if (val === '&sk') {
                 let combinedFallback = [formatParamFull(p1, layerNames), formatParamFull(p2, layerNames)].filter(x => x).join(' ');
                 return `Sticky Key: ${formatKeycode(combinedFallback, osMode)}`;
