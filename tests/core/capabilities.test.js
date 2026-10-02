@@ -216,7 +216,7 @@ describe('capabilities/builtinCatalog — every Flows Automation shipped WITH GL
         colors_magic: { background: '#112233', color: '#eeeeee' },
         hrm_add: { target_version: '2', mod_preset: 'GACS', set_decorators: true },
         alt_layout: { layout_name: 'colemak-dh' },
-        smart_theme_colors: { mode: 'apply', os: 'win', theme: 'tailorkey' },
+        auto_decorate: { mode: 'colors_labels', os: 'win', theme: 'tailorkey' },
     };
 
     const go60Config = { keyboard: 'go60', layer_names: ['Base'], layers: [Array.from({ length: 62 }, () => ({ value: '&kp', params: [{ value: 'A', params: [] }] }))] };
@@ -315,7 +315,7 @@ describe('capabilities/builtinCatalog — every Flows Automation shipped WITH GL
             // its own dedicated tests below for what the port had to adapt.
             'hrm_bil60', 'hrm_bil80', 'hrm_remove', 'symbols2_gb_mac', 'macro_wizard',
             'mirror_keyboard_halves',
-            'mouse_emulation', 'os_remap', 'punct_swap', 'smart_theme_colors', 'symbols2_se',
+            'mouse_emulation', 'os_remap', 'punct_swap', 'auto_decorate', 'symbols2_se',
             'symbols2_se_mac', 'oneshot_modifier', 'mouse_swap_trackpads', 'sym_numrow_v1',
             'sym_numrow_v2', 'top_15_zmk_behaviors',
         ].sort());

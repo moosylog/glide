@@ -1,13 +1,13 @@
-uid = "smart_theme_colors"
+uid = "auto_decorate"
 
-title = "Smart Theme Colorizer"
+title = "Auto Decorate"
 
-subtitle = "Visual Themes, Macros & OS Swaps"
+subtitle = "Colors & Labels, by OS and Theme"
 
 description = '''
-Colors your keys automatically based on what they do and your chosen visual theme — home-row keys, and shortcuts like Copy/Paste/Search/Navigation, matched to macOS or Windows.
+Decorates your keys automatically based on what they do: a background color from your chosen visual theme, and a decorator label pulled from a built-in table of common shortcuts — Copy/Paste/Undo/Redo, Save/Open/Close, Find/Switch-App, navigation and selection, browser shortcuts — each one aware of whether it means something different on Windows/Linux vs macOS (e.g. ⌘C vs Ctrl+C, or Ctrl+Y vs ⇧⌘Z for Redo).
 
-Run it again with Execution Mode set to **Clean Slate** to remove all the colors it added.'''
+Execution Mode controls what gets touched: apply colors and labels together, either one on its own (leaving the other alone), or strip both back off. Arrow keys (Up/Down/Left/Right) never get a label — the Layout Editor already shows them as directional arrows.'''
 
 script = '''
 # =========================================================
@@ -215,7 +215,7 @@ end) as $homerow_theme |
       (. | tostring)
     end;
 
-  if $mode == "delete" then
+  if $mode == "remove" then
     # OVERRIDE: Strip ALL decorators from EVERY key on ALL layers
     if .layers then
       .layers |= map(map(if type == "object" then del(.decoration) else . end))
@@ -259,7 +259,7 @@ end) as $homerow_theme |
               end
             ) as $final_label |
 
-            # Compile the decoration payload, explicitly stripping missing properties
+            # Compile the full decoration payload, explicitly stripping missing properties
             # ONLY strips nulls now. Allows "" (empty string) through to blank out labels!
             (
               {
@@ -269,8 +269,20 @@ end) as $homerow_theme |
                 description: $target_style.description,
                 label: $final_label
               } | with_entries(select(.value != null))
+            ) as $full_dec |
+
+            # Execution Mode decides which half of $full_dec actually gets written. "colors"
+            # drops the text fields (label/description), so it never touches a label a previous
+            # labels-only run -- or a hand-typed custom label -- already set. "labels" drops the
+            # visual fields (background/color/icon), so it never touches a color a previous
+            # colors-only run already set. "colors_labels" writes the whole thing, same as before.
+            (
+              if $mode == "colors" then ($full_dec | del(.label, .description))
+              elif $mode == "labels" then ($full_dec | del(.background, .color, .icon))
+              else $full_dec
+              end
             ) as $new_dec |
-            
+
             # Apply the dynamic payload securely
             if type == "object" then
               .decoration = ((.decoration // {}) + $new_dec)
@@ -288,7 +300,7 @@ end) as $homerow_theme |
 
 category = "Decorations & RGB"
 
-successMessage = "Key decorators were assigned from your chosen theme: home-row keys on the base layer, and matching shortcuts (copy, paste, navigation, browser, …) across every layer. Run this again with Execution Mode set to \"DELETE APPLIED Decorators\" to strip it all back off."
+successMessage = "Decorators were assigned per your Execution Mode: home-row keys on the base layer, and matching shortcuts (copy, paste, navigation, browser, …) across every layer, each aware of macOS vs Windows/Linux. Colors only and Labels only each leave the other half of any existing decoration untouched. Run this again with Execution Mode set to \"Remove Decorators\" to strip both back off."
 
 [manifest]
 author = "moosyresearch"
@@ -299,9 +311,9 @@ icon = "🌈"
 id = "mode"
 label = "Execution Mode"
 type = "select"
-options = ["apply", "delete"]
-labels = ["🎨 Apply Theme Colors", "🗑️ DELETE APPLIED Decorators"]
-default = "apply"
+options = ["colors_labels", "colors", "labels", "remove"]
+labels = ["🎨 Colors + Labels (overwrite)", "🖌️ Colors only (overwrite)", "🏷️ Labels only (overwrite)", "🗑️ Remove Decorators (colors & labels)"]
+default = "colors_labels"
 
 [[param]]
 id = "os"
