@@ -39,20 +39,21 @@ def finger:
       | if . == "middle" then "middy" elif . == "pink" then "pinky" else . end
     end;
 
+def thumbish($f): $f == "thumb" or $f == "space";
+def fixed: $preset == "urob" or $preset == "brave";   # these two presets leave thumb and space as they are
+
 def values($f; $name):
   if $preset == "keep" then null
-  elif $preset == "urob" then
-    if ($f == "thumb" or $f == "space") then null
-    else {tt: 280, qt: 175, pi: 150, flavor: "balanced"} end
+  elif fixed and thumbish($f) then null
+  elif $preset == "urob" then {tt: 280, qt: 175, pi: 150, flavor: "balanced"}
   elif $preset == "brave" then
-    if ($f == "thumb" or $f == "space") then null
-    elif $f == "index" then {tt: 200, qt: 150, pi: 0, flavor: "balanced"}
+    if $f == "index" then {tt: 200, qt: 150, pi: 0, flavor: "balanced"}
     else {tt: 250, qt: 150, pi: 100, flavor: "balanced"} end
   else
     ($preset | tonumber) as $l
     | $matrix[$f] as $m
     | {tt: $m.tt[$l], qt: $m.qt[$l], pi: $m.pi[$l],
-       flavor: (if ($f == "thumb" or $f == "space") then "balanced" else "tap-preferred" end)}
+       flavor: (if thumbish($f) then "balanced" else "tap-preferred" end)}
     | if $f == "index" and ($name | ascii_downcase | contains("right")) then .pi = 80 else . end
   end;
 
@@ -73,7 +74,7 @@ def values($f; $name):
                .tappingTermMs = $v.tt | .quickTapMs = $v.qt | .requirePriorIdleMs = $v.pi | .flavor = $v.flavor
                | del(.retroTap, .holdWhileUndecided, .holdWhileUndecidedLinger)
              else . end)
-          | if $nudge != 0 and ($f != "thumb" and $f != "space" or $preset != "urob" and $preset != "brave") then
+          | if $nudge != 0 and (fixed and thumbish($f) | not) then
               .tappingTermMs = ([((.tappingTermMs // 0) + $nudge), 50] | max)
             else . end
         end)
@@ -85,7 +86,7 @@ def values($f; $name):
         $after + {_flowReport: {changed: true,
           lines: ([{ok: true, text: "Updated the timing of \($changed) of \($found) home-row hold-taps"}]
                  + (if $nudge != 0 then [{ok: true, text: "Nudged the tapping term by \($nudge) ms (\(if $nudge > 0 then "slower" else "faster" end))"}] else [] end)
-                 + (if ($preset == "urob" or $preset == "brave") then [{ok: true, text: "Thumb and space keys were left as they were"}] else [] end)),
+                 + (if fixed then [{ok: true, text: "Thumb and space keys were left as they were"}] else [] end)),
           log: ["hold-taps found: \($found), changed: \($changed), nudge: \($nudge)"]}}
       end
   end'''
