@@ -1,0 +1,118 @@
+uid = "oneshot_modifier"
+
+title = "Tap this key for one capital"
+
+subtitle = "OneShot Shift"
+
+description = '''
+Tap Shift once to capitalize just the next letter, or hold it to Shift normally — no more two-hand Shift-holds for a single capital.
+
+⚠️ Needs sticky-key support in the Layout Editor. Adds an example layer (**OneShot_example**) with a ready-to-use key — copy it onto your real Shift key to start using it. Stops safely if you already have this set up.'''
+
+script = '''
+# ==============================================================================
+# ONESHOT SHIFT
+# ==============================================================================
+# Adds a sticky key, a macro and a hold-tap that together make a Shift key you can
+# tap for one capital, plus an example layer (OneShot_example) holding that key.
+#
+# It stops, and changes nothing, when: the file has no layers, a layer is too short
+# to hold the example key, any of the parts below already exists, or all 32 layers
+# are in use.
+# ==============================================================================
+
+def MAX_LAYERS: 32;
+def EXAMPLE_LAYER: "OneShot_example";
+def EXAMPLE_KEY: 46; # where the ready-made Shift key sits on the example layer
+
+# The layout as it is now, to tell afterwards what changed.
+(if type == "object" and .keymap? then .keymap else . end) as $before |
+
+(if type == "object" and .keymap? then .keymap else . end) |= (
+
+  # --- CHECKS: stop before changing anything ---
+  (if (.layers | type) != "array" or (.layers | length) == 0
+   then error("This file has no layers, so there is nothing to add the OneShot layer to.")
+   else . end) |
+  ((.layers[0] | length) as $kb_len
+   | if $kb_len <= EXAMPLE_KEY
+     then error("The first layer has only \($kb_len) keys, too few to hold the example Shift key.")
+     else . end) |
+  ([
+    (if ((.stickyKeys // []) | any(.name == "&sticky_key_quickrel")) then "the sticky key &sticky_key_quickrel" else empty end),
+    (if ((.macros // []) | any(.name == "&sticky_key_oneshot")) then "the macro &sticky_key_oneshot" else empty end),
+    (if ((.holdTaps // []) | any(.name == "&sticky_key_modtap")) then "the hold-tap &sticky_key_modtap" else empty end),
+    (if ((.layer_names // []) | index(EXAMPLE_LAYER)) != null then "a layer named \(EXAMPLE_LAYER)" else empty end)
+  ]) as $conflicts |
+  (if ($conflicts | length) > 0
+   then error("OneShot Shift is already set up, at least in part. Your layout has \($conflicts | join(", ")). Nothing was changed. Remove those first if you want to start over.")
+   else . end) |
+  (if (.layers | length) >= MAX_LAYERS
+   then error("The example layer needs one free layer, and your layout already has all \(MAX_LAYERS) allowed. Remove a layer first.")
+   else . end) |
+
+  (.layers[0] | length) as $kb_len |
+
+  # --- The sticky key, the macro that feeds it, and the hold-tap you put on a key ---
+  .stickyKeys = ((.stickyKeys // []) + [{
+    "name": "&sticky_key_quickrel",
+    "description": "",
+    "releaseAfterMs": 500,
+    "quickRelease": true,
+    "lazy": false,
+    "ignoreModifiers": true,
+    "bindings": ["&kp"]
+  }]) |
+  .macros = ((.macros // []) + [{
+    "name": "&sticky_key_oneshot",
+    "description": "",
+    "waitMs": 0,
+    "tapMs": 0,
+    "bindings": [
+      {"value": "&macro_tap"},
+      {"value": "&macro_param_1to1"},
+      {"value": "&sticky_key_quickrel", "params": [{"value": "MACRO_PLACEHOLDER"}]}
+    ]
+  }]) |
+  .holdTaps = ((.holdTaps // []) + [{
+    "name": "&sticky_key_modtap",
+    "description": "",
+    "flavor": "tap-preferred",
+    "tappingTermMs": 250,
+    "bindings": ["&kp", "&sticky_key_oneshot"]
+  }]) |
+
+  # --- The example layer: empty except for one ready-made Shift key ---
+  .layer_names = ((.layer_names // []) + [EXAMPLE_LAYER]) |
+  .layers = (.layers + [[
+    range($kb_len) |
+    if . == EXAMPLE_KEY then
+      {
+        "value": "&sticky_key_modtap",
+        "params": [{"value": "LSHFT"}, {"value": "LSHFT"}],
+        "decoration": {"label": "Shift", "icon": "fa-angle-double-up", "background": "#ffecb3"}
+      }
+    else
+      {"value": "&none"}
+    end
+  ]])
+)
+
+# --- REPORT ---
+| (if type == "object" and .keymap? then .keymap else . end) as $after
+| . + {_flowReport: {
+    changed: true,
+    lines: [{ok: true, text: "Added the OneShot_example layer (layer \($after.layers | length)) with one ready-made OneShot Shift key"},
+            {ok: true, text: "Added the sticky key, macro and hold-tap behind it"}],
+    log: ["layers: \($before.layers | length) before, \($after.layers | length) after"]
+  }}'''
+
+category = "Modifier keys"
+
+successMessage = "OneShot Shift is set up, with an example layer called 'OneShot_example'. Copy the example key onto your real Shift key to start using tap-to-capitalize."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["glove80", "go60"]
+icon = "✨"
+keywords = ["sticky", "shift", "capital", "sticky key"]

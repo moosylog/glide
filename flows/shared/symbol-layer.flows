@@ -1,0 +1,141 @@
+uid = "add_symbol_layer"
+
+title = "Symbol layer"
+
+subtitle = "All your punctuation in one place"
+
+description = '''
+Adds a **Symbol** layer with your punctuation and brackets in one place, plus a key that types `..` in one press.
+
+The **Symbol layer: language** automations (German, French, UK, Swedish) need this layer to exist first.'''
+
+script = '''
+# ==============================================================================
+# Symbol layer
+#
+# Adds a layer called "Symbol" with punctuation and brackets, and one macro,
+# &symb_dotdot_v1_TKZ, that types ".." in one press. Then, if the base layer's
+# right thumb key is a plain key press, it becomes a layer-tap: tap it for the
+# same key, hold it for the Symbol layer. Any other key there is left alone.
+# Nothing else is touched. The "Symbol layer: language" automations translate this layer.
+# ==============================================================================
+
+# Limits and fixed names. MAX_LAYERS is the layout schema's layer limit (schemas/*.json).
+def MAX_LAYERS: 32;
+"Symbol" as $layerName
+| "&symb_dotdot_v1_TKZ" as $macroName
+
+# Key background colors, by what the key does.
+| "#fbe6fe" as $pink      # quotes, backtick, tilde
+| "#fffec9" as $yellow    # shifted number-row symbols
+| "#e0ebf6" as $blue      # brackets
+| "#d9f9c9" as $green     # other punctuation
+| "#f8e6d7" as $brown     # editing keys
+| "#e5feff" as $cyan      # underscore, plus, &, ..
+| "#f2f2f2ff" as $grey    # sticky modifiers
+
+# One key on the layer. Plain keys are key("A"; color); Shift+key is key(shift("N1"); color); a third argument is the label shown on the key.
+| def shift($code): {value: "LS", params: [{value: $code}]};
+  def code: if type == "string" then {value: .} else . end;
+  def key($k; $bg): {value: "&kp", params: [$k | code], decoration: {background: $bg}};
+  def key($k; $bg; $caption): {value: "&kp", params: [$k | code], decoration: {label: $caption, background: $bg}};
+  def sticky($k; $bg): {value: "&sk", params: [$k | code], decoration: {background: $bg}};
+  def none: {value: "&none"};
+  def nones($n): [range($n) | none][];
+  def dotdot($bg): {value: $macroName, decoration: {background: $bg}};
+  def dotdot($bg; $caption): {value: $macroName, decoration: {label: $caption, background: $bg}};
+  def fingerprint($bg): {value: "&none", decoration: {icon: "io-finger-print", color: "#ffffffff", background: $bg}};
+
+# The two layers, key by key, in the keyboard's key order. Go60 has 60 typed keys; the
+# last two positions of its 62 are left empty below so the layer is as long as the others.
+def go60Layer: [
+    key("GRAVE"; $pink), key("COMMA"; $yellow), key(shift("N9"); $blue), key(shift("N0"); $blue),
+    key("SEMI"; $yellow), key("DOT"; $yellow), nones(6), key(shift("N1"); $pink),
+    key("LBKT"; $blue), key(shift("LBKT"); $blue), key(shift("RBKT"); $blue), key("RBKT"; $blue),
+    key(shift("FSLH"); $yellow), key("GRAVE"; $pink), key("DEL"; $brown), key(shift("TAB"); $brown),
+    key("INS"; $brown), key("ESC"; $brown), none, key(shift("N3"); $yellow),
+    key(shift("N6"); $yellow), key("EQUAL"; $green), key(shift("MINUS"); $brown), key(shift("N4"); $yellow),
+    key(shift("N8"); $yellow), key(shift("SINGLE_QUOTE"); $pink), key("BSPC"; $brown), key("TAB"; $brown),
+    key("SPACE"; $brown), key("RET"; $brown), none, key(shift("GRAVE"); $pink),
+    key(shift("COMMA"); $green), key(shift("BSLH"); $green), key("MINUS"; $green), key(shift("DOT"); $green),
+    key("FSLH"; $yellow), key("SQT"; $pink), sticky("LSHFT"; $grey), sticky("LCTRL"; $grey),
+    sticky("LALT"; $grey), sticky("LGUI"; $grey), none, key("SQT"; $pink),
+    key(shift("SINGLE_QUOTE"); $pink), key(shift("EQUAL"); $brown), key("BSLH"; $yellow), key(shift("N7"); $yellow),
+    dotdot($yellow), key(shift("N5"); $yellow), key(shift("SEMI"); $yellow), key(shift("N2"); $yellow),
+    nones(2), fingerprint("#000000ff")
+];
+
+def glove80Layer: [
+    nones(10), key("GRAVE"; $pink), key(shift("N6"); $yellow; "^"), key(shift("N9"); $blue; "("),
+    key(shift("N0"); $blue; ")"), key("SEMI"; $green), key("COMMA"; $green), nones(6),
+    key(shift("N1"); $pink; "!"), key("LBKT"; $blue), key(shift("LBKT"); $blue; "{"), key(shift("RBKT"); $blue; "}"),
+    key("RBKT"; $blue), key(shift("FSLH"); $yellow; "?"), key("DOT"; $green; "."), key("DEL"; $brown),
+    key(shift("TAB"); $brown; "Shift Tab"), key("INS"; $brown), key("ESC"; $brown), none,
+    key(shift("N3"); $yellow; "#"), key(shift("N6"); $yellow; "^"), key("EQUAL"; $green), key(shift("MINUS"); $cyan; "_"),
+    key(shift("N4"); $yellow; "$"), key(shift("N8"); $yellow; "*"), key("COMMA"; $green; ","), key("BSPC"; $brown),
+    key("TAB"; $brown), key("SPACE"; $brown), key("RET"; $brown), none,
+    key(shift("GRAVE"); $pink; "~"), key(shift("COMMA"); $green; "<"), key(shift("BSLH"); $green; "|"), key("MINUS"; $green),
+    key(shift("DOT"); $green; ">"), key("FSLH"; $yellow), key("BSLH"; $pink), key("DOT"; $green; "."),
+    key(shift("N8"); $yellow; "*"), nones(3), key("SEMI"; $green; ";"), key(shift("SINGLE_QUOTE"); $pink; "\""),
+    key("SQT"; $pink; "'"), key("GRAVE"; $pink; "`"), key("BSLH"; $pink), none,
+    dotdot($cyan; ".."), key(shift("N7"); $cyan; "&"), key("SQT"; $pink), key(shift("SINGLE_QUOTE"); $pink; "\""),
+    key(shift("EQUAL"); $cyan; "+"), key(shift("N5"); $yellow; "%"), key(shift("SEMI"); $yellow; ":"), key(shift("N2"); $yellow; "@"),
+    nones(2), fingerprint("#000000fc"), sticky("RSHFT"; $grey), sticky("RCTRL"; $grey),
+    sticky("RALT"; $grey), sticky("RGUI"; $grey), none
+];
+
+# The macro: tap "." twice.
+def dotDotMacro: {name: $macroName, description: "Symbol layer dot dot", waitMs: 0, tapMs: 0, bindings: [{value: "&macro_tap"}, {value: "&kp", params: [{value: "DOT"}]}, {value: "&kp", params: [{value: "DOT"}]}], params: []};
+
+# The base layer position of the right thumb key that becomes the layer-tap, per keyboard.
+def thumbKeyAt($keyboard): if $keyboard == "glove80" then 74 else 59 end;
+
+# Every behavior name in the layout, whichever list it lives in (names must be unique across all of them).
+def behaviorNames: [(.macros, .holdTaps, .tapDances, .modMorphs, .stickyKeys)[]? | .name];
+
+(.keyboard? | if type == "string" then ascii_downcase else "glove80" end) as $kb
+| (.keymap // .) as $km
+| if ($km | type) != "object" or ($km.layers | type) != "array" or ($km.layers | length) == 0 then error("This file has no layers, so there is nothing to add the Symbol layer to.")
+  elif ($km.layer_names // [] | index($layerName)) != null then error("A layer named \"\($layerName)\" already exists, so nothing was added. Rename or remove it first.")
+  elif ($km.layers[0] | length) as $n | (if $kb == "go60" then ($n != 60 and $n != 62) else $n != 80 end) then error("The first layer has \($km.layers[0] | length) keys, but the \(if $kb == "go60" then "Go60 has 60 keys (plus 2 touchpad positions)" else "Glove80 has 80" end).")
+  elif ($km.layers | length) >= MAX_LAYERS then error("Your layout already has \($km.layers | length) layers and the limit is \(MAX_LAYERS). Remove a layer first.")
+  elif ($km | behaviorNames | index($macroName)) != null and ($km.macros // [] | map(.name) | index($macroName)) == null then error("A behavior named \($macroName) already exists and is not a macro. Rename it first.")
+  else . end
+
+| ($km.layers[0] | length) as $keyCount
+| ((if $kb == "go60" then go60Layer else glove80Layer end) as $keys | $keys + [range([$keyCount - ($keys | length), 0] | max) | none]) as $newLayer
+| ($km.macros // [] | map(.name) | index($macroName) != null) as $macroExisted
+| thumbKeyAt($kb) as $thumbAt
+| $km.layers[0][$thumbAt] as $thumb
+| ($thumb.value == "&kp" and ($thumb.params // []) != []) as $upgradeThumb
+
+| (.keymap // .) |= (
+    (if $macroExisted then . else .macros = ((.macros // []) + [dotDotMacro]) end)
+    | .layer_names = ((.layer_names // []) + [$layerName])
+    | .layers = (.layers + [$newLayer])
+    | if $upgradeThumb then
+        .layers[0][$thumbAt] = ({value: "&lt", params: [{value: (.layer_names | index($layerName)), params: []}, $thumb.params[0]]}
+                                + (if $thumb.decoration then {decoration: $thumb.decoration} else {} end))
+      else . end
+  )
+| . + {_flowReport: {
+    changed: true,
+    lines: ([{ok: true, text: "Added the Symbol layer (layer \($km.layers | length + 1))"},
+             {ok: true, text: (if $macroExisted then "Kept your existing macro \($macroName)" else "Added the macro \($macroName), which types .." end)}]
+            + [if $upgradeThumb
+               then {ok: true, text: "Base layer key \($thumbAt + 1) is now a layer-tap, hold it for Symbol"}
+               else {ok: false, text: "Base layer key \($thumbAt + 1) is not a plain key, so it was left alone. Assign a key to switch to Symbol yourself."} end]),
+    log: ["\($kb) layout, \($keyCount) keys per layer, \($newLayer | length) keys on the new layer",
+          "macro \($macroName) \(if $macroExisted then "already existed" else "added" end)",
+          "base layer key \($thumbAt + 1) was \($thumb.value // "missing")\(if $upgradeThumb then " and became &lt " + ($km.layers | length | tostring) else "" end)"]
+  }}'''
+
+category = "Symbols"
+
+successMessage = "A new Symbol layer was added, plus a key that types `..`. If your right thumb key was a plain key press, it is now a layer-tap that holds into Symbol — otherwise assign a key to switch to that layer yourself. The Symbol layer: language automations need this layer to exist first."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "🔣"
+keywords = ["punctuation", "brackets", "special characters"]

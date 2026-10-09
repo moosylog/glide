@@ -1,0 +1,141 @@
+uid = "ai_control"
+
+title = "AI assistant layer"
+
+subtitle = "Shortcuts for working with AI tools"
+
+description = '''
+Adds an **AI_Control** layer with ready-made shortcuts for working with AI assistants, plus matching keys on your **Lower** layer.
+
+⚠️ Needs tap-dance, mod-morph and sticky-key support in the Layout Editor. Stops safely if you already have an AI_Control layer, and never overwrites an existing macro or behavior with the same name. **If you already have a layer called Lower, it is replaced** by the AI shortcuts, so run this on a layout where that is fine.'''
+
+script = '''
+def MAX_LAYERS: 32;
+def names(f): [(.[f] // [])[] | .name];
+
+# The macros the AI layer needs. A macro you already have under the same name is kept as it is.
+def AI_MACROS: [
+    {"name":"&ai_usage","description":"Zero-config AI: Usage","tapMs":15,"waitMs":15,"bindings":[{"value":"&ai_composer"},{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"FSLH"}]},{"value":"&kp","params":[{"value":"U"}]},{"value":"&kp","params":[{"value":"S"}]},{"value":"&kp","params":[{"value":"A"}]},{"value":"&kp","params":[{"value":"G"}]},{"value":"&kp","params":[{"value":"E"}]},{"value":"&kp","params":[{"value":"ENTER"}]}]},
+    {"name":"&ai_composer","description":"","tapMs":30,"waitMs":15,"bindings":[{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"ESC"}]},{"value":"&kp","params":[{"value":"I"}]}]},
+    {"name":"&ai_claude_background","description":"Zero-config AI: Claude Background","tapMs":15,"waitMs":15,"bindings":[{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"LC","params":[{"value":"X"}]}]},{"value":"&kp","params":[{"value":"LC","params":[{"value":"B"}]}]}]},
+    {"name":"&ai_claude_btw","description":"Zero-config AI: Claude BTW","tapMs":15,"waitMs":15,"bindings":[{"value":"&ai_composer"},{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"FSLH"}]},{"value":"&kp","params":[{"value":"B"}]},{"value":"&kp","params":[{"value":"T"}]},{"value":"&kp","params":[{"value":"W"}]},{"value":"&kp","params":[{"value":"ENTER"}]}]},
+    {"name":"&ai_claude_agents","description":"Zero-config AI: Claude Agents","tapMs":15,"waitMs":15,"bindings":[{"value":"&ai_composer"},{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"FSLH"}]},{"value":"&kp","params":[{"value":"A"}]},{"value":"&kp","params":[{"value":"G"}]},{"value":"&kp","params":[{"value":"E"}]},{"value":"&kp","params":[{"value":"N"}]},{"value":"&kp","params":[{"value":"T"}]},{"value":"&kp","params":[{"value":"S"}]},{"value":"&kp","params":[{"value":"ENTER"}]}]},
+    {"name":"&ai_codex_side","description":"Zero-config AI: Codex Side","tapMs":15,"waitMs":15,"bindings":[{"value":"&ai_composer"},{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"FSLH"}]},{"value":"&kp","params":[{"value":"S"}]},{"value":"&kp","params":[{"value":"I"}]},{"value":"&kp","params":[{"value":"D"}]},{"value":"&kp","params":[{"value":"E"}]},{"value":"&kp","params":[{"value":"ENTER"}]}]},
+    {"name":"&ai_codex_raw","description":"Zero-config AI: Codex Raw","tapMs":15,"waitMs":15,"bindings":[{"value":"&ai_composer"},{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"FSLH"}]},{"value":"&kp","params":[{"value":"R"}]},{"value":"&kp","params":[{"value":"A"}]},{"value":"&kp","params":[{"value":"W"}]},{"value":"&kp","params":[{"value":"ENTER"}]}]},
+    {"name":"&ai_codex_fast","description":"Zero-config AI: Codex Fast","tapMs":15,"waitMs":15,"bindings":[{"value":"&ai_composer"},{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"FSLH"}]},{"value":"&kp","params":[{"value":"F"}]},{"value":"&kp","params":[{"value":"A"}]},{"value":"&kp","params":[{"value":"S"}]},{"value":"&kp","params":[{"value":"T"}]},{"value":"&kp","params":[{"value":"ENTER"}]}]},
+    {"name":"&ai_claude_new","description":"Zero-config AI: New Claude","tapMs":15,"waitMs":15,"bindings":[{"value":"&ai_composer"},{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"FSLH"}]},{"value":"&kp","params":[{"value":"C"}]},{"value":"&kp","params":[{"value":"L"}]},{"value":"&kp","params":[{"value":"E"}]},{"value":"&kp","params":[{"value":"A"}]},{"value":"&kp","params":[{"value":"R"}]},{"value":"&kp","params":[{"value":"ENTER"}]}]},
+    {"name":"&ai_permissions","description":"Zero-config AI: Permissions","tapMs":15,"waitMs":15,"bindings":[{"value":"&ai_composer"},{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"FSLH"}]},{"value":"&kp","params":[{"value":"P"}]},{"value":"&kp","params":[{"value":"E"}]},{"value":"&kp","params":[{"value":"R"}]},{"value":"&kp","params":[{"value":"M"}]},{"value":"&kp","params":[{"value":"I"}]},{"value":"&kp","params":[{"value":"S"}]},{"value":"&kp","params":[{"value":"S"}]},{"value":"&kp","params":[{"value":"I"}]},{"value":"&kp","params":[{"value":"O"}]},{"value":"&kp","params":[{"value":"N"}]},{"value":"&kp","params":[{"value":"S"}]},{"value":"&kp","params":[{"value":"ENTER"}]}]},
+    {"name":"&ai_claude_effort_down","description":"Zero-config AI: Claude Effort Down","tapMs":15,"waitMs":15,"bindings":[{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"LA","params":[{"value":"P"}]}]},{"value":"&kp","params":[{"value":"LEFT"}]}]},
+    {"name":"&ai_claude_effort_up","description":"Zero-config AI: Claude Effort Up","tapMs":15,"waitMs":15,"bindings":[{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"LA","params":[{"value":"P"}]}]},{"value":"&kp","params":[{"value":"RIGHT"}]}]},
+    {"name":"&ai_model","description":"Zero-config AI: Model","tapMs":15,"waitMs":15,"bindings":[{"value":"&ai_composer"},{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"FSLH"}]},{"value":"&kp","params":[{"value":"M"}]},{"value":"&kp","params":[{"value":"O"}]},{"value":"&kp","params":[{"value":"D"}]},{"value":"&kp","params":[{"value":"E"}]},{"value":"&kp","params":[{"value":"L"}]},{"value":"&kp","params":[{"value":"ENTER"}]}]},
+    {"name":"&ai_status","description":"Zero-config AI: Status","tapMs":15,"waitMs":15,"bindings":[{"value":"&ai_composer"},{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"FSLH"}]},{"value":"&kp","params":[{"value":"S"}]},{"value":"&kp","params":[{"value":"T"}]},{"value":"&kp","params":[{"value":"A"}]},{"value":"&kp","params":[{"value":"T"}]},{"value":"&kp","params":[{"value":"U"}]},{"value":"&kp","params":[{"value":"S"}]},{"value":"&kp","params":[{"value":"ENTER"}]}]},
+    {"name":"&ai_claude_copy","description":"Zero-config AI: Claude Copy","tapMs":15,"waitMs":15,"bindings":[{"value":"&ai_composer"},{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"FSLH"}]},{"value":"&kp","params":[{"value":"C"}]},{"value":"&kp","params":[{"value":"O"}]},{"value":"&kp","params":[{"value":"P"}]},{"value":"&kp","params":[{"value":"Y"}]},{"value":"&kp","params":[{"value":"ENTER"}]}]},
+    {"name":"&ai_resume","description":"Zero-config AI: Resume","tapMs":15,"waitMs":15,"bindings":[{"value":"&ai_composer"},{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"FSLH"}]},{"value":"&kp","params":[{"value":"R"}]},{"value":"&kp","params":[{"value":"E"}]},{"value":"&kp","params":[{"value":"S"}]},{"value":"&kp","params":[{"value":"U"}]},{"value":"&kp","params":[{"value":"M"}]},{"value":"&kp","params":[{"value":"E"}]},{"value":"&kp","params":[{"value":"ENTER"}]}]},
+    {"name":"&ai_compact","description":"Zero-config AI: Compact","tapMs":15,"waitMs":15,"bindings":[{"value":"&ai_composer"},{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"FSLH"}]},{"value":"&kp","params":[{"value":"C"}]},{"value":"&kp","params":[{"value":"O"}]},{"value":"&kp","params":[{"value":"M"}]},{"value":"&kp","params":[{"value":"P"}]},{"value":"&kp","params":[{"value":"A"}]},{"value":"&kp","params":[{"value":"C"}]},{"value":"&kp","params":[{"value":"T"}]},{"value":"&kp","params":[{"value":"ENTER"}]}]},
+    {"name":"&ai_diff","description":"Zero-config AI: Diff","tapMs":15,"waitMs":15,"bindings":[{"value":"&ai_composer"},{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"FSLH"}]},{"value":"&kp","params":[{"value":"D"}]},{"value":"&kp","params":[{"value":"I"}]},{"value":"&kp","params":[{"value":"F"}]},{"value":"&kp","params":[{"value":"F"}]},{"value":"&kp","params":[{"value":"ENTER"}]}]},
+    {"name":"&ai_review","description":"Zero-config AI: Review","tapMs":15,"waitMs":15,"bindings":[{"value":"&ai_composer"},{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"FSLH"}]},{"value":"&kp","params":[{"value":"R"}]},{"value":"&kp","params":[{"value":"E"}]},{"value":"&kp","params":[{"value":"V"}]},{"value":"&kp","params":[{"value":"I"}]},{"value":"&kp","params":[{"value":"E"}]},{"value":"&kp","params":[{"value":"W"}]},{"value":"&kp","params":[{"value":"ENTER"}]}]},
+    {"name":"&ai_plan","description":"Zero-config AI: Plan","tapMs":15,"waitMs":15,"bindings":[{"value":"&ai_composer"},{"value":"&macro_tap"},{"value":"&kp","params":[{"value":"FSLH"}]},{"value":"&kp","params":[{"value":"P"}]},{"value":"&kp","params":[{"value":"L"}]},{"value":"&kp","params":[{"value":"A"}]},{"value":"&kp","params":[{"value":"N"}]},{"value":"&kp","params":[{"value":"ENTER"}]}]},
+    {"name":"&sticky_key_oneshot","description":"","tapMs":0,"waitMs":0,"bindings":[{"value":"&macro_tap"},{"value":"&macro_param_1to1"},{"value":"&sticky_key_quickrel","params":[{"value":"MACRO_PLACEHOLDER"}]}]}
+  ];
+
+# What the layout holds before the changes, to tell afterwards what was added and what was kept.
+(if type == "object" and .keymap? then .keymap else . end) as $km
+| {macros: ($km | names("macros")), sticky: ($km | names("stickyKeys")), holdTaps: ($km | names("holdTaps")),
+   lowerExisted: ((($km.layer_names // []) | index("Lower")) != null)} as $before
+
+| (if type == "object" and .keymap? then .keymap else . end) |= (
+
+  # ----------------------------------------------------------------------------
+  # 1. PRE-FLIGHT SAFETY CHECKS
+  # ----------------------------------------------------------------------------
+
+  # Check 1: Glove80 only
+  (if (.keyboard | type == "string" and ascii_downcase == "glove80") | not then
+    error("This automation is made for the Glove80 only.")
+  else . end) |
+
+  # Check 2: Stop if there is no layer list to add to
+  (if (.layers | type) != "array" or (.layers | length) == 0 then
+    error("This file has no layers, so there is nothing to add the AI layer to.")
+  else . end) |
+
+  # Check 3: Stop if the AI_Control layer already exists
+  (if ((.layer_names // []) | index("AI_Control")) != null then
+    error("Your layout already has a layer named AI_Control, so nothing was changed. Rename or remove it first.")
+  else . end) |
+
+  # Check 4: Room for the new layers. AI_Control is added, and Lower too when you have none.
+  ((if ((.layer_names // []) | index("Lower")) != null then 1 else 2 end) as $new
+   | if (.layers | length) + $new > MAX_LAYERS then
+       error("The AI shortcuts need \($new) free layer\(if $new == 1 then "" else "s" end), and your layout has \(.layers | length) of the \(MAX_LAYERS) allowed. Remove a layer first.")
+     else . end) |
+
+  # ----------------------------------------------------------------------------
+  # 2. BEHAVIOR INJECTIONS (Idempotent - Skips if already exists)
+  # ----------------------------------------------------------------------------
+  
+  # Inject Sticky Keys safely (This fixes the missing &sticky_key_quickrel error)
+  .stickyKeys = ((.stickyKeys // []) + [
+    { "name": "&sticky_key_quickrel", "description": "Quick Release Sticky Key", "releaseAfterMs": 500, "quickRelease": true, "lazy": false, "ignoreModifiers": true, "bindings": ["&kp"] }
+  ] | unique_by(.name)) |
+
+  # Inject HoldTaps safely
+  .holdTaps = ((.holdTaps // []) + [
+    { "name": "&sticky_key_modtap", "description": "", "flavor": "tap-preferred", "tappingTermMs": 250, "bindings": ["&kp", "&sticky_key_oneshot"] }
+  ] | unique_by(.name)) |
+
+  # Inject Macros safely
+  .macros = ((.macros // []) + AI_MACROS | unique_by(.name)) |
+
+  # ----------------------------------------------------------------------------
+  # 3. LAYER INJECTIONS
+  # ----------------------------------------------------------------------------
+  
+  # A. 'Lower' Layer Logic: Update if exists, otherwise append
+  (
+    [{"value":"&kp","params":[{"value":"C_BRI_DN"}]},{"value":"&kp","params":[{"value":"C_BRI_UP"}]},{"value":"&kp","params":[{"value":"C_PREV"}]},{"value":"&kp","params":[{"value":"C_NEXT"}]},{"value":"&kp","params":[{"value":"C_PP"}]},{"value":"&kp","params":[{"value":"C_MUTE"}]},{"value":"&kp","params":[{"value":"C_VOL_DN"}]},{"value":"&kp","params":[{"value":"C_VOL_UP"}]},{"value":"&none"},{"value":"&kp","params":[{"value":"PAUSE_BREAK"}]},{"value":"&trans"},{"value":"&none"},{"value":"&none"},{"value":"&none"},{"value":"&none"},{"value":"&kp","params":[{"value":"HOME"}]},{"value":"&kp","params":[{"value":"LS","params":[{"value":"N9"}]}]},{"value":"&kp","params":[{"value":"KP_NUM"}]},{"value":"&kp","params":[{"value":"KP_EQUAL"}]},{"value":"&kp","params":[{"value":"KP_SLASH"}]},{"value":"&kp","params":[{"value":"KP_MULTIPLY"}]},{"value":"&kp","params":[{"value":"PRINTSCREEN"}]},{"value":"&trans"},{"value":"&none"},{"value":"&none"},{"value":"&kp","params":[{"value":"UP_ARROW"}]},{"value":"&none"},{"value":"&kp","params":[{"value":"END"}]},{"value":"&kp","params":[{"value":"LS","params":[{"value":"N0"}]}]},{"value":"&kp","params":[{"value":"KP_N7"}]},{"value":"&kp","params":[{"value":"KP_N8"}]},{"value":"&kp","params":[{"value":"KP_N9"}]},{"value":"&kp","params":[{"value":"KP_MINUS"}]},{"value":"&kp","params":[{"value":"SCROLLLOCK"}]},{"value":"&trans"},{"value":"&none"},{"value":"&kp","params":[{"value":"LEFT_ARROW"}]},{"value":"&kp","params":[{"value":"DOWN_ARROW"}]},{"value":"&kp","params":[{"value":"RIGHT_ARROW"}]},{"value":"&kp","params":[{"value":"PG_UP"}]},{"value":"&kp","params":[{"value":"LS","params":[{"value":"N5"}]}]},{"value":"&kp","params":[{"value":"KP_N4"}]},{"value":"&kp","params":[{"value":"KP_N5"}]},{"value":"&kp","params":[{"value":"KP_N6"}]},{"value":"&kp","params":[{"value":"KP_PLUS"}]},{"value":"&none"},{"value":"&trans"},{"value":"&kp","params":[{"value":"K_APP"}]},{"value":"&none"},{"value":"&kp","params":[{"value":"F11"}]},{"value":"&kp","params":[{"value":"F12"}]},{"value":"&kp","params":[{"value":"PG_DN"}]},{"value":"&trans"},{"value":"&trans"},{"value":"&to","params":[{"value":0}]},{"value":"&trans"},{"value":"&trans"},{"value":"&trans"},{"value":"&kp","params":[{"value":"COMMA"}]},{"value":"&kp","params":[{"value":"KP_N1"}]},{"value":"&kp","params":[{"value":"KP_N2"}]},{"value":"&kp","params":[{"value":"KP_N3"}]},{"value":"&kp","params":[{"value":"KP_ENTER"}]},{"value":"&trans"},{"value":"&magic"},{"value":"&kp","params":[{"value":"CAPS"}]},{"value":"&kp","params":[{"value":"INS"}]},{"value":"&kp","params":[{"value":"F11"}]},{"value":"&kp","params":[{"value":"F12"}]},{"value":"&trans"},{"value":"&trans"},{"value":"&trans"},{"value":"&trans"},{"value":"&trans"},{"value":"&trans"},{"value":"&kp","params":[{"value":"KP_N0"}]},{"value":"&kp","params":[{"value":"KP_N0"}]},{"value":"&kp","params":[{"value":"KP_DOT"}]},{"value":"&kp","params":[{"value":"KP_ENTER"}]},{"value":"&trans"}]
+  ) as $lower_keys |
+  (.layer_names | index("Lower")) as $lower_idx |
+  (if $lower_idx != null then
+    .layers[$lower_idx] = $lower_keys
+  else
+    .layer_names += ["Lower"] | .layers += [$lower_keys]
+  end) |
+
+  # B. 'AI_Control' Layer Logic: Append layer and keys
+  (
+    [{"value":"&none"},{"value":"&none"},{"value":"&none"},{"value":"&none"},{"value":"&none"},{"value":"&none"},{"value":"&none"},{"value":"&none"},{"value":"&none"},{"value":"&none"},{"value":"&ai_usage","params":[],"decoration":{"label":"Usage /usage","background":"#bbdefb"}},{"value":"&ai_claude_background","decoration":{"label":"Background Ctrl+X, Ctrl+B","background":"#ede7f6"},"params":[]},{"value":"&kp","params":[{"value":"LC","params":[{"value":"S"}]}],"decoration":{"label":"Stash Ctrl+S","background":"#bbdefb"}},{"value":"&kp","params":[{"value":"LA","params":[{"value":"T"}]}],"decoration":{"label":"Thinking Alt+T","background":"#ede7f6"}},{"value":"&ai_claude_btw","params":[],"decoration":{"label":"BTW /btw","background":"#bbdefb"}},{"value":"&ai_claude_agents","decoration":{"label":"Agents /agents","background":"#bbdefb"},"params":[]},{"value":"&ai_claude_agents","decoration":{"label":"Agents /agents","background":"#bbdefb"},"params":[]},{"value":"&ai_codex_side","params":[],"decoration":{"label":"Side /side","background":"#bbdefb"}},{"value":"&ai_codex_raw","params":[],"decoration":{"label":"Raw /raw","background":"#bbdefb"}},{"value":"&kp","params":[{"value":"LA","params":[{"value":"UP"}]}],"decoration":{"background":"#bbdefb"}},{"value":"&ai_codex_fast","params":[],"decoration":{"label":"Fast /fast","background":"#bbdefb"}},{"value":"&ai_usage","params":[],"decoration":{"label":"Usage /usage","background":"#bbdefb"}},{"value":"&ai_claude_new","params":[],"decoration":{"label":"New /clear","background":"#bbdefb"}},{"value":"&ai_permissions","params":[],"decoration":{"label":"permission /permission","background":"#ede7f6"}},{"value":"&ai_claude_effort_down","decoration":{"label":"Effort Alt-P Left","background":"#ede7f6"},"params":[]},{"value":"&ai_claude_effort_up","decoration":{"label":"Effort Alt-P right","background":"#ede7f6"},"params":[]},{"value":"&ai_model","params":[],"decoration":{"label":"Model /model","background":"#ede7f6"}},{"value":"&kp","params":[{"value":"LC","params":[{"value":"O"}]}],"decoration":{"label":"Details Ctrl+O","background":"#bbdefb"}},{"value":"&kp","params":[{"value":"LC","params":[{"value":"O"}]}],"decoration":{"label":"Details Ctrl+O","background":"#bbdefb"}},{"value":"&ai_model","params":[],"decoration":{"label":"Model /model","background":"#ede7f6"}},{"value":"&ai_claude_effort_up","decoration":{"label":"Effort Alt-P right","background":"#ede7f6"},"params":[]},{"value":"&ai_claude_effort_down","decoration":{"label":"Effort Alt-P Left","background":"#ede7f6"},"params":[]},{"value":"&ai_permissions","params":[],"decoration":{"label":"permission /permission","background":"#ede7f6"}},{"value":"&ai_claude_new","params":[],"decoration":{"label":"New /clear","background":"#bbdefb"}},{"value":"&ai_status","params":[],"decoration":{"label":"Status /status","background":"#bbdefb"}},{"value":"&kp","params":[{"value":"N"}],"decoration":{"label":"Decline N","background":"#ffccbc"}},{"value":"&kp","params":[{"value":"UP"}],"decoration":{"background":"#e8f5e9"}},{"value":"&kp","params":[{"value":"DOWN"}],"decoration":{"background":"#e8f5e9"}},{"value":"&kp","params":[{"value":"Y"}],"decoration":{"label":"Accept Y","background":"#e8f5e9"}},{"value":"&ai_claude_copy","params":[],"decoration":{"label":"Copy /copy","background":"#bbdefb"}},{"value":"&ai_claude_copy","params":[],"decoration":{"label":"Copy /copy","background":"#bbdefb"}},{"value":"&kp","params":[{"value":"Y"}],"decoration":{"label":"Accept Y","background":"#e8f5e9"}},{"value":"&kp","params":[{"value":"DOWN"}],"decoration":{"background":"#e8f5e9"}},{"value":"&kp","params":[{"value":"UP"}],"decoration":{"background":"#e8f5e9"}},{"value":"&kp","params":[{"value":"N"}],"decoration":{"label":"Decline N","background":"#ffccbc"}},{"value":"&ai_status","params":[],"decoration":{"label":"Status /status","background":"#bbdefb"}},{"value":"&ai_resume","params":[],"decoration":{"label":"Resume /resume","background":"#bbdefb"}},{"value":"&ai_compact","params":[],"decoration":{"label":"Compact /compact","background":"#ffecb3"}},{"value":"&ai_diff","params":[],"decoration":{"label":"Diff /diff","background":"#ffecb3"}},{"value":"&ai_review","params":[],"decoration":{"label":"Review /review","background":"#ffecb3"}},{"value":"&ai_plan","params":[],"decoration":{"label":"Plan /plan","background":"#ffecb3"}},{"value":"&kp","params":[{"value":"LC","params":[{"value":"G"}]}],"decoration":{"label":"Editor Ctrl + G","background":"#bbdefb"}},{"value":"&kp","params":[{"value":"RET"}],"decoration":{"label":"Submit Enter","background":"#e8f5e9"}},{"value":"&kp","params":[{"value":"RET"}],"decoration":{"label":"Submit Enter","background":"#e8f5e9"}},{"value":"&ai_claude_background","decoration":{"background":"#ede7f6"},"params":[]},{"value":"&kp","params":[{"value":"TAB"}],"decoration":{"background":"#e4e2f0"}},{"value":"&kp","params":[{"value":"J"}],"decoration":{"label":"Newline Ctrl+J","background":"#ede7f6"}},{"value":"&kp","params":[{"value":"RET"}],"decoration":{"label":"Submit Enter","background":"#e8f5e9"}},{"value":"&kp","params":[{"value":"LC","params":[{"value":"G"}]}],"decoration":{"label":"Editor Ctrl + G","background":"#bbdefb"}},{"value":"&ai_plan","params":[],"decoration":{"label":"Plan /plan","background":"#ffecb3"}},{"value":"&ai_review","params":[],"decoration":{"label":"Review /review","background":"#ffecb3"}},{"value":"&ai_diff","params":[],"decoration":{"label":"Diff /diff","background":"#ffecb3"}},{"value":"&ai_compact","params":[],"decoration":{"label":"Compact /compact","background":"#ffecb3"}},{"value":"&ai_resume","params":[],"decoration":{"label":"Resume /resume","background":"#bbdefb"}},{"value":"&none"},{"value":"&none"},{"value":"&none"},{"value":"&none"},{"value":"&sticky_key_modtap","params":[{"value":"LSHFT"},{"value":"LSHFT"}],"decoration":{"label":"lShift","icon":"fa-angle-double-up","background":"#ffecb3"}},{"value":"&kp","params":[{"value":"Y"}],"decoration":{"label":"Accept Y","background":"#e8f5e9"}},{"value":"&kp","params":[{"value":"N"}],"decoration":{"label":"Decline N","background":"#ffccbc"}},{"value":"&kp","params":[{"value":"C"}],"decoration":{"label":"Stop","background":"#ffcdd2"}},{"value":"&kp","params":[{"value":"C"}],"decoration":{"label":"Stop","background":"#ffcdd2"}},{"value":"&kp","params":[{"value":"N"}],"decoration":{"label":"Decline N","background":"#ffccbc"}},{"value":"&kp","params":[{"value":"Y"}],"decoration":{"label":"Accept Y","background":"#e8f5e9"}},{"value":"&sticky_key_modtap","params":[{"value":"RSHFT"},{"value":"RSHFT"}],"decoration":{"label":"rShift","icon":"fa-angle-double-up","background":"#ffecb3"}},{"value":"&none"},{"value":"&none"},{"value":"&none"},{"value":"&none"}]
+  ) as $ai_keys |
+  .layer_names += ["AI_Control"] | .layers += [$ai_keys]
+)
+
+# ----------------------------------------------------------------------------
+# 4. REPORT
+# ----------------------------------------------------------------------------
+| (if type == "object" and .keymap? then .keymap else . end) as $after
+| def added(f; $old): [($after | names(f))[] | select(. as $n | $old | index($n) | not)];
+  added("macros"; $before.macros) as $newMacros
+| ($after.layers | length) as $count
+| ([AI_MACROS[].name | select(. as $n | $before.macros | index($n))] | length) as $kept
+| . + {_flowReport: {
+    changed: true,
+    lines: ([{ok: true, text: "Added the AI_Control layer (layer \($count))"},
+             (if $before.lowerExisted
+              then {ok: false, text: "Your existing Lower layer was replaced by the AI shortcuts. Undo if you want it back."}
+              else {ok: true, text: "Added a Lower layer with the matching shortcuts (layer \($count - 1))"} end),
+             {ok: true, text: "Added \($newMacros | length) macros\(if $kept > 0 then ", kept \($kept) you already had with the same name" else "" end)"}]),
+    log: ["layers: \($count - (if $before.lowerExisted then 1 else 2 end)) before, \($count) after",
+          "new macros: \($newMacros | join(", "))",
+          "new sticky keys: \(added("stickyKeys"; $before.sticky) | join(", "))",
+          "new hold-taps: \(added("holdTaps"; $before.holdTaps) | join(", "))"]
+  }}'''
+
+category = "Shortcuts & macros"
+
+successMessage = "Your new AI_Control layer is ready, with its macros and matching shortcuts on the Lower layer. To use it, assign a key that switches to AI_Control."
+
+[manifest]
+author = "Dongdong"
+keyboards = ["glove80"]
+icon = "AI"
+keywords = ["claude", "chatgpt", "llm", "copilot"]

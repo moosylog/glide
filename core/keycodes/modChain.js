@@ -1,0 +1,2 @@
+/*! GLIDE (c) 2026 Moosy. All rights reserved. See LICENSE.txt. */
+(function(){"use strict";const s=window.GlideCore||(window.GlideCore={}),{MOD_WRAPPER_TO_FULL:c}=s;function i(a){const t=[];for(;a&&typeof a=="object"&&c[a.value]&&a.params?.[0];)t.push(c[a.value]),a=a.params[0];const e=a&&typeof a=="object"?a.value:a;return{mods:t,keyVal:e}}function l(a,t){let e={value:a,params:[]};for(let r=t.length-1;r>=0;r--)e={value:t[r],params:[e]};return e}Object.assign(s,{unwrapModChain:i,composeKeycodeParam:l})})();

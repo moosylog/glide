@@ -1,0 +1,107 @@
+uid = "os_remap"
+
+title = "Switch between macOS and Windows"
+
+subtitle = "Swap Ctrl and Cmd everywhere"
+
+description = '''
+Swaps Ctrl and Cmd/GUI everywhere in your layout — including inside combinations like Ctrl+C — so Copy, Paste and Undo land on the same physical key on macOS and Windows.
+
+Run it again any time to swap back — everything returns exactly as it was.
+
+Optional: also trade Ctrl+Y for Cmd+Shift+Z, the macOS Redo. That option is not an exact swap if you also use Ctrl+Shift+Z, and the result tells you when that applies.'''
+
+script = '''
+# ==============================================================================
+# SWAP CTRL AND CMD
+# ==============================================================================
+# Swaps Ctrl and Cmd/GUI everywhere: plain keys, combinations like Ctrl+C, macros,
+# combos, on every layer. Swapping twice puts everything back exactly.
+#
+# With "Also convert Redo" set to Yes, Ctrl+Y and Cmd+Shift+Z trade places as well
+# (macOS has no Ctrl+Y Redo). That one is not an exact swap: a Ctrl+Shift+Z key also
+# ends up as Cmd+Shift+Z, so the report warns about it.
+# ==============================================================================
+
+# The swap map, in both directions.
+def get_replacements: {
+  "LCTRL": "LGUI", "RCTRL": "RGUI", "LGUI": "LCTRL", "RGUI": "RCTRL",
+  "LC": "LG", "RC": "RG", "LG": "LC", "RG": "RC"
+};
+
+# The shortcuts the Redo option looks at.
+def is_ctrl_y: .value == "LC" and .params[0].value == "Y";
+def is_cmd_shift_z: .value == "LG" and .params[0].value == "LS" and .params[0].params[0].value == "Z";
+def is_ctrl_shift_z: .value == "LC" and .params[0].value == "LS" and .params[0].params[0].value == "Z";
+def redo_pair: $redo == "yes" and (is_ctrl_y or is_cmd_shift_z);
+
+# Every object with a "value" anywhere in the file.
+def bindings: [.. | objects | select(has("value"))];
+# Applied from the inside out, so rewriting a shortcut never leaves half of its old nesting behind.
+def for_every_binding(f): walk(if type == "object" and has("value") then f else . end);
+
+# PASS 1 (Redo option only): Ctrl+Y and Cmd+Shift+Z trade places.
+def pass_1_redo:
+  if $redo != "yes" then .
+  elif is_ctrl_y then .value = "LG" | .params[0] = { "value": "LS", "params": [{ "value": "Z", "params": [] }] }
+  elif is_cmd_shift_z then .value = "LC" | .params = [{ "value": "Y", "params": [] }]
+  else . end;
+
+# PASS 2: the swap itself. The results of pass 1 are left alone, or they would swap back.
+def pass_2_swap($r):
+  if redo_pair then .
+  else
+    .value |= (
+      if type == "string" then
+        if startswith("LC(") then sub("LC\\("; "LG(")
+        elif startswith("LG(") then sub("LG\\("; "LC(")
+        elif startswith("RC(") then sub("RC\\("; "RG(")
+        elif startswith("RG(") then sub("RG\\("; "RC(")
+        else ($r[.] // .)
+        end
+      else .
+      end)
+  end;
+
+# Is this binding one that the swap changes?
+def touched($r):
+  select(redo_pair | not)
+  | select(.value | type == "string" and (in($r) or test("^(LC|LG|RC|RG)\\(")));
+
+# --- EXECUTION ---
+get_replacements as $r |
+. as $before |
+([$before | bindings[] | select(is_ctrl_y or is_cmd_shift_z)] | length) as $redone |
+([$before | bindings[] | select(is_ctrl_shift_z)] | length) as $ctrlShiftZ |
+([$before | bindings[] | touched($r)] | length) as $swapped |
+for_every_binding(pass_1_redo) |
+for_every_binding(pass_2_swap($r))
+| if $swapped + $redone == 0 then
+    . + {_flowReport: {changed: false, message: "Nothing was changed: there is no Ctrl or Cmd/GUI key anywhere in this layout.", lines: [], log: ["no Ctrl/GUI bindings found"]}}
+  else
+    . + {_flowReport: {
+        changed: true,
+        lines: ([{ok: true, text: "Swapped Ctrl and Cmd/GUI on \($swapped) keys and shortcuts"}]
+                + (if $redo == "yes" and $redone > 0 then [{ok: true, text: "Traded Ctrl+Y and Cmd+Shift+Z on \($redone) keys"}] else [] end)
+                + (if $redo == "yes" and $ctrlShiftZ > 0 then [{ok: false, text: "\($ctrlShiftZ) Ctrl+Shift+Z keys became Cmd+Shift+Z. Running this Flow again turns them into Ctrl+Y, not back into Ctrl+Shift+Z."}] else [] end)),
+        log: ["swapped: \($swapped), redo keys traded: \($redone), Ctrl+Shift+Z: \($ctrlShiftZ)"]
+      }}
+  end'''
+
+category = "Other"
+
+successMessage = "Ctrl and Cmd/GUI have been swapped across every layer, including combinations like Ctrl+C — Copy, Paste and Undo now land on the same physical key on either system. Run it again to swap back."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "🍎"
+keywords = ["mac", "windows", "ctrl", "cmd", "apple"]
+
+[[param]]
+id = "redo"
+label = "Also convert Redo (Ctrl+Y and Cmd+Shift+Z)"
+type = "select"
+options = ["no", "yes"]
+labels = ["No (exact swap)", "Yes (Ctrl+Y becomes Cmd+Shift+Z)"]
+default = "no"

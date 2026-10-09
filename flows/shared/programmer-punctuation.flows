@@ -1,0 +1,168 @@
+uid = "punct_swap"
+
+title = "Programmer punctuation"
+
+subtitle = "Easier : and \\\" for coding"
+
+description = '''
+Makes `:` and `"` easier to type when coding: swaps the Shifted and unshifted `;` and `'` — plus an optional double-tap on F4 to close windows.
+
+⚠️ Needs tap-dance and mod-morph support in the Layout Editor. Each part is optional — turn any of them off.'''
+
+script = '''
+# ZMK Autonomous Injection Script - Punctuation Swap & F4 Close
+
+# ==============================================================================
+# 1. BEHAVIOR DEFINITIONS
+# ==============================================================================
+
+def get_mm_semi: {
+  "name": "&GLD_mm_swap_semi",
+  "description": "Mod-Morph: Colon / Semicolon",
+  "cases": [
+    {
+      "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "SEMI"}]}] },
+      "mods": [],
+      "keepMods": []
+    },
+    {
+      "binding": { "value": "&kp", "params": [{"value": "SEMI"}] },
+      "mods": ["MOD_LSFT", "MOD_RSFT"],
+      "keepMods": []
+    }
+  ]
+};
+
+def get_mm_sqt: {
+  "name": "&GLD_mm_swap_sqt",
+  "description": "Mod-Morph: D-Quote / S-Quote",
+  "cases": [
+    {
+      "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "SQT"}]}] },
+      "mods": [],
+      "keepMods": []
+    },
+    {
+      "binding": { "value": "&kp", "params": [{"value": "SQT"}] },
+      "mods": ["MOD_LSFT", "MOD_RSFT"],
+      "keepMods": []
+    }
+  ]
+};
+
+def get_td_f4_close: {
+  "name": "&GLD_td_f4_close",
+  "description": "Tap-Dance: F4 / Alt+F4",
+  "tappingTermMs": 200,
+  "bindings": [
+    {
+      "value": "&kp",
+      "params": [{"value": "F4"}]
+    },
+    {
+      "value": "&kp",
+      "params": [{"value": "LA", "params": [{"value": "F4"}]}]
+    }
+  ]
+};
+
+# ==============================================================================
+# 2. MAIN TRANSFORMATION ENGINE
+# ==============================================================================
+
+# Adds the items whose name is not in the list yet; ones you already have are kept as they are.
+def add_missing($new):
+  (. // []) as $have
+  | $have + ($new | map(select(.name as $n | ($have | map(.name) | index($n)) == null)));
+
+# The keys of the first layer.
+def base_keys: ((.layers // [])[0] // []);
+def count_kp($code): [base_keys[] | select(type == "object" and .value == "&kp" and (.params[0].value // "") == $code)] | length;
+def count_bound($name): [base_keys[] | select(type == "object" and .value == $name)] | length;
+def keys($n): "\($n) key\(if $n == 1 then "" else "s" end)";
+
+# The three choices: the key they change, the behavior that replaces it, and how to call it.
+[
+  { "on": ($swap_semi == "yes"), "key": "SEMI", "behavior": "&GLD_mm_swap_semi", "what": "semicolon" },
+  { "on": ($swap_sqt == "yes"),  "key": "SQT",  "behavior": "&GLD_mm_swap_sqt",  "what": "quote" },
+  { "on": ($td_f4 == "yes"),     "key": "F4",   "behavior": "&GLD_td_f4_close",  "what": "F4" }
+] as $options |
+
+# The layout as it is now, to tell afterwards what changed.
+(if type == "object" and .keymap? then .keymap else . end) as $before |
+
+if ($options | any(.on)) | not then
+  . + {_flowReport: {changed: false, message: "Nothing was changed: all three options are set to No.", lines: [], log: ["all options off"]}}
+else
+  ($options | map(select(.on) | {(.key): {"value": .behavior}}) | add) as $map |
+
+  (.keymap // .) |= (
+    # The behaviors for the options that are on. Ones you already have are kept.
+    .modMorphs = ((.modMorphs // []) | add_missing(
+      (if $swap_semi == "yes" then [get_mm_semi] else [] end)
+      + (if $swap_sqt == "yes" then [get_mm_sqt] else [] end))) |
+    .tapDances = ((.tapDances // []) | add_missing(if $td_f4 == "yes" then [get_td_f4_close] else [] end)) |
+
+    # Put them on the matching keys of the first layer (decorations stay).
+    (if (.layers | length) > 0 then
+      .layers[0] |= map(
+        if type == "object" and .value == "&kp" and .params and (.params | length > 0) and (.params[0].value | in($map)) then
+          $map[.params[0].value] + (if .decoration then {decoration: .decoration} else {} end)
+        else . end)
+    else . end)
+  )
+
+  # --- REPORT ---
+  | (if type == "object" and .keymap? then .keymap else . end) as $after
+  | ($options | map(select(.on)
+      | (. as $o | ($before | count_kp($o.key))) as $replaced
+      | (. as $o | ($before | count_bound($o.behavior))) as $already
+      | if $replaced > 0 then {ok: true, text: "Replaced \(keys($replaced)) of \(.what) on your first layer"}
+        elif $already > 0 then empty
+        else {ok: false, text: "There is no \(.what) key on your first layer, so \(.behavior) was added but is not on any key. Assign it to a key yourself."} end)) as $lines
+  | ((($after.modMorphs // []) | length) - (($before.modMorphs // []) | length)
+     + (($after.tapDances // []) | length) - (($before.tapDances // []) | length)) as $added
+  | if $before == $after then
+      . + {_flowReport: {changed: false, message: "Nothing was changed: these behaviors are already in your layout and on your first layer.", lines: [], log: ["identical"]}}
+    else
+      . + {_flowReport: {
+          changed: true,
+          lines: ((if $added > 0 then [{ok: true, text: "Added \($added) behaviors"}] else [] end) + $lines),
+          log: ["options: \($options | map(select(.on) | .what) | join(", "))"]
+        }}
+    end
+end'''
+
+category = "Symbols"
+
+successMessage = "Semicolon/colon and quote keys now swap on Shift as you chose, and F4 double-tap now closes the active window if you enabled it. Each toggle is independent — re-run to change your mind on any one of them."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "🔀"
+keywords = ["semicolon", "colon", "quotes", "coding", "programming"]
+
+[[param]]
+id = "swap_semi"
+label = "Swap Semicolon / Colon"
+type = "select"
+options = ["yes", "no"]
+labels = ["Yes (Tap: Colon, Shift: Semicolon)", "No (Keep Default)"]
+default = "yes"
+
+[[param]]
+id = "swap_sqt"
+label = "Swap Single / Double Quotes"
+type = "select"
+options = ["yes", "no"]
+labels = ["Yes (Tap: Double, Shift: Single)", "No (Keep Default)"]
+default = "yes"
+
+[[param]]
+id = "td_f4"
+label = "F4 Double Tap to Close"
+type = "select"
+options = ["yes", "no"]
+labels = ["Yes (Tap: F4, Double Tap: Alt+F4)", "No (Keep Default)"]
+default = "yes"

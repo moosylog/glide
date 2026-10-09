@@ -1,0 +1,2 @@
+/*! GLIDE (c) 2026 Moosy. All rights reserved. See LICENSE.txt. */
+(function(){"use strict";const r=window.GlideCore||(window.GlideCore={}),c=s=>{const e=r.KEYCODE_ENTRY.get(s)?.chord,o=e&&e.match(/^([LR][SCAG])\((.+)\)$/);return o?{base:o[2],mods:[o[1]]}:{base:s,mods:[]}},n=({base:s,mods:e},o=[])=>r.composeKeycodeParam(s,r.MOD_ARM_ORDER.filter(t=>e.includes(t)||o.includes(t)));Object.assign(r,{resolveKeyPress:c,keyPressParam:(s,e=[])=>n(c(s),e),pressParam:n,itemPress:s=>s.press||(s.code?c(s.code):null)})})();

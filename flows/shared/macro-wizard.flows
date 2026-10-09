@@ -1,0 +1,111 @@
+uid = "macro_wizard"
+
+title = "Text macro maker"
+
+subtitle = "Type text, get a macro"
+
+description = '''
+Type the text you want and get a ready-to-use macro — no clicking it together by hand in the editor.
+
+🚫 **Don't put passwords or personal information in your layout** — layout files have no private mode.'''
+
+script = '''
+# ==============================================================================
+# Text macro maker
+#
+# Turns the text you type into one macro that types it: lower-case letters, digits
+# and symbols are single key taps; a capital letter is Shift held around the letter.
+# Params: $macro_id (the name), $macro_string (the text), $overwrite_macro.
+# Nothing else in the layout is touched. A problem (bad name, a character the keyboard
+# cannot type, text too long, a name already in use) stops with a plain message
+# instead of writing a file that would not load.
+# ==============================================================================
+
+# Limits from the layout schema (schemas/*.json): macro name pattern, steps per macro, description length.
+def MAX_STEPS: 256;
+def MAX_DESCRIPTION: 1000;
+def NAME_PATTERN: "^&[a-zA-Z]\\w*$";
+
+# The key each symbol is typed with, as pressed on a US keyboard: a name for a plain key, ["LS", key] for Shift plus a key
+# (the way Layout Editor stores it: $ is LS(N4), never DOLLAR).
+def symbols: {
+  " ": "SPACE", "!": ["LS","N1"], "@": ["LS","N2"], "#": ["LS","N3"], "$": ["LS","N4"], "%": ["LS","N5"], "^": ["LS","N6"],
+  "&": ["LS","N7"], "*": ["LS","N8"], "(": ["LS","N9"], ")": ["LS","N0"], "-": "MINUS", "_": ["LS","MINUS"], "=": "EQUAL",
+  "+": ["LS","EQUAL"], "[": "LBKT", "{": ["LS","LBKT"], "]": "RBKT", "}": ["LS","RBKT"], "|": ["LS","BSLH"], ";": "SEMI",
+  ":": ["LS","SEMI"], "'": "SQT", ",": "COMMA", "<": ["LS","COMMA"], ".": "DOT", ">": ["LS","DOT"], "/": "FSLH",
+  "?": ["LS","FSLH"], "`": "GRAVE", "~": ["LS","GRAVE"], "\\": "BSLH", "\"": ["LS","SQT"]
+};
+
+def step($name): {value: $name, params: []};
+def key($code): {value: "&kp", params: [{value: $code}]};
+def symbolKey($press): if ($press | type) == "array" then {value: "&kp", params: [{value: $press[0], params: [{value: $press[1], params: []}]}]} else key($press) end;
+
+# The steps that type one character. A capital is Shift pressed, the letter tapped, Shift released.
+def typeChar:
+  if test("^[A-Z]$") then [{value: "&macro_press"}, key("LSHFT"), {value: "&macro_tap"}, key(.), {value: "&macro_release"}, key("LSHFT"), {value: "&macro_tap"}]
+  elif test("^[a-z]$") then [key(ascii_upcase)]
+  elif test("^[0-9]$") then [key("N" + .)]
+  else [symbolKey(symbols[.])] end;
+
+# Characters the keyboard has no key for (accents, emoji, tabs, line breaks ...), each listed once.
+def untypeable($text): [$text | split("")[] | select(test("^[A-Za-z0-9]$") | not) | select(symbols[.] == null)] | unique;
+
+# Every behavior name in the layout, whichever list it lives in (names must be unique across all of them).
+def behaviorNames: [(.macros, .holdTaps, .tapDances, .modMorphs, .stickyKeys)[]? | .name];
+
+# Same name for the macro whether or not the user typed the leading "&".
+($macro_id | ltrimstr("&") | "&" + .) as $name
+| ($macro_string | untypeable(.)) as $bad
+| ($macro_string | split("") | map(typeChar) | add // []) as $steps
+| (.keymap // .) as $km
+
+| if ($km | type) != "object" then error("This file has no keymap, so there is nothing to add the macro to.")
+  elif ($macro_string | length) == 0 then error("Type the text the macro should type.")
+  elif ($name | test(NAME_PATTERN) | not) then error("The macro name must start with a letter and use only letters, digits and underscores, with no spaces. \"\($macro_id)\" doesn't fit.")
+  elif ($name | length) > 65 then error("The macro name is too long. Use 64 characters or fewer.")
+  elif ($bad | length) > 0 then error("The keyboard has no keys for \($bad | join(" ")). Use plain letters, digits and the symbols on a US keyboard.")
+  elif ($steps | length) > MAX_STEPS then error("That text needs \($steps | length) steps and a macro holds \(MAX_STEPS). Capital letters use 7 steps each, everything else 1. Shorten the text or split it into two macros.")
+  elif ("Print \"\($macro_string)\"" | length) > MAX_DESCRIPTION then error("The text is too long.")
+  else . end
+
+| {name: $name, description: "Print \"\($macro_string)\"", bindings: $steps, params: []} as $macro
+| ($km | behaviorNames | index($name)) as $used
+| ($km.macros // [] | map(.name) | index($name)) as $at
+
+| if $used != null and $at == null then error("A behavior named \($name) already exists and is not a macro. Pick another name.")
+  elif $at != null and ($overwrite_macro | not) then error("A macro named \($name) already exists. Pick another name, or turn on \"Replace a macro with the same name\".")
+  elif $at != null then
+    (.keymap // .) |= (.macros[$at] = $macro)
+    | . + {_flowReport: {changed: true, message: "Replaced your macro \($name). It types \"\($macro_string)\".", lines: [{ok: true, text: "Replaced the macro \($name) (\($steps | length) steps)"}], log: ["replaced \($name) at position \($at)", "\($steps | length) steps for \($macro_string | length) characters"]}}
+  else
+    (.keymap // .) |= (.macros = ((.macros // []) + [$macro]))
+    | . + {_flowReport: {changed: true, message: "Your macro \($name) is ready. Assign it to any key to type \"\($macro_string)\".", lines: [{ok: true, text: "Added the macro \($name) (\($steps | length) steps)"}], log: ["added \($name)", "\($steps | length) steps for \($macro_string | length) characters"]}}
+  end'''
+
+category = "Shortcuts & macros"
+
+successMessage = "Your macro is ready. Assign it to any key by its name. You can run this again with a new name or text; a macro with the same name is replaced unless you turned that off."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "🧙🏼‍♂️"
+keywords = ["text", "snippet", "type for me"]
+
+[[param]]
+id = "macro_id"
+label = "Macro Name"
+type = "text"
+default = "flows_macro_string"
+
+[[param]]
+id = "macro_string"
+label = "Text to Type"
+type = "text"
+default = "Tr0ub4doR12@#$%"
+
+[[param]]
+id = "overwrite_macro"
+label = "Replace a macro with the same name"
+type = "boolean"
+default = true

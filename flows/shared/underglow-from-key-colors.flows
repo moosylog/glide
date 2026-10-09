@@ -1,0 +1,356 @@
+uid = "colors_create_rgb_scheme"
+
+title = "Underglow from key colors"
+
+subtitle = "Per-key RGB lighting (PR36)"
+
+description = '''
+Turns the colors you gave your keys into per-key RGB lighting for the PR36 community firmware. [Learn about PR36](https://sites.google.com/view/tailorkey/how-to/rgb).
+
+- **Choose a style.** Screen colors look washed out on real LEDs, so "Bright colors" boosts them to look right on the keyboard. "Battery saver" lights one LED color per key.
+- **Safe to run again.** The lighting is written between two marker lines in your Custom Devicetree, and a run again replaces only that part. Your own code there is kept. A key with a note starting with `no_rgb` stays dark, and a transparent key lets the layer below shine through.
+- Colors that end up the same on the keyboard share one name, so the file stays small.
+- The report warns you when your Custom Devicetree holds other per-key lighting code outside the marker lines, or several earlier lighting sections, because two lighting sections can clash when you build.
+- **Lock-key indicators (optional).** The Caps, Num or Scroll Lock key lights up in the indicator color while that lock is on. They are placed on the key that presses the lock, on each layer where it is found. A lock set on a combo is not found.
+
+After applying: in the Layout Editor choose the PR36 community firmware in Settings, build, flash, then do a configuration factory reset on the keyboard and pair Bluetooth again.'''
+
+script = '''
+# ----------------------------------------------------------------------------
+# Underglow from key colors: writes a PR36 RGB scheme into Custom Devicetree.
+#
+# 1. Read the key colors (6-digit hex), black means unlit.
+# 2. Convert each to the color the LED should show, depending on the chosen style.
+# 3. Colors that end up identical share one name (C01, C02, ...).
+# 4. Write one block per layer, between two marker lines. The markers are the same
+#    ones the Kiilix editor uses, so both tools recognize each other's lighting.
+# ----------------------------------------------------------------------------
+def START: "// ==== PER-KEY-RGB <section begins> ====";
+def END: "// ==== PER-KEY-RGB <section ends> ====";
+
+# An older version of this automation wrote the block without markers.
+def OLD_START: "#if __has_include(<dt-bindings/zmk/rgb_colors.h>)";
+def OLD_END: "  #undef ___\n#endif";
+
+# ---- Colors ----------------------------------------------------------------
+
+# "#F80" or "#FF8800" or "#FF8800CC" as "FF8800"; "" for anything else.
+def rgbHex:
+  if type == "string" and test("^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$") then
+    (.[1:] | ascii_upcase) as $h
+    | if ($h | length) == 3 then ($h | [.[0:1], .[0:1], .[1:2], .[1:2], .[2:3], .[2:3]] | join("")) else ($h | .[0:6]) end
+  else "" end;
+
+def hexByte: explode | map(if . >= 97 then . - 87 elif . >= 65 then . - 55 else . - 48 end) | .[0] * 16 + .[1];
+def parseRgb: [.[0:2], .[2:4], .[4:6]] | map(hexByte);
+def hex2: (. / 16 | floor) as $hi | (. - 16 * $hi) as $lo | "0123456789ABCDEF" | .[$hi:$hi + 1] + .[$lo:$lo + 1];
+def toHex: map(hex2) | join("");
+
+def clamp($lo; $hi): if . < $lo then $lo elif . > $hi then $hi else . end;
+def cube: . * . * .;
+def toLinear: . / 255 | if . <= 0.04045 then . / 12.92 else pow((. + 0.055) / 1.055; 2.4) end;
+def fromLinear: clamp(0; 1) | if . <= 0.0031308 then . * 12.92 else 1.055 * pow(.; 1 / 2.4) - 0.055 end;
+def toByte: . * 255 | round | clamp(0; 255);
+
+# sRGB bytes to OKLab, the color space where "how colorful" can be changed without shifting the hue.
+def toOklab:
+  map(toLinear) as [$r, $g, $b]
+  | ((0.412221469470763 * $r + 0.5363325372617348 * $g + 0.0514459932675022 * $b) | cbrt) as $l
+  | ((0.2119034958178252 * $r + 0.6806995506452344 * $g + 0.1073969535369406 * $b) | cbrt) as $m
+  | ((0.0883024591900564 * $r + 0.2817188391361215 * $g + 0.6299787016738222 * $b) | cbrt) as $s
+  | [0.210454268309314 * $l + 0.7936177747023054 * $m - 0.0040720430116193 * $s,
+     1.9779985324311684 * $l - 2.4285922420485799 * $m + 0.450593709617411 * $s,
+     0.0259040424655478 * $l + 0.7827717124575296 * $m - 0.8086757549230774 * $s];
+
+def fromOklab:
+  . as [$L, $a, $b]
+  | (($L + 0.3963377773761749 * $a + 0.2158037573099136 * $b) | cube) as $l
+  | (($L - 0.1055613458156586 * $a - 0.0638541728258133 * $b) | cube) as $m
+  | (($L - 0.0894841775298119 * $a - 1.2914855480370667 * $b) | cube) as $s
+  | [4.0767416360759583 * $l - 3.3077115392580630 * $m + 0.2309699031821043 * $s,
+     -1.2684379732850317 * $l + 2.6097573492876887 * $m - 0.3413193760026573 * $s,
+     -0.0041960761386756 * $l - 0.7034186179359362 * $m + 1.7076146940746117 * $s]
+  | map(fromLinear | toByte);
+
+# "Bright colors": four times as colorful (but never beyond what an LED can show),
+# then a gamma curve, because LEDs look much brighter than a screen at the same value.
+def bright: toOklab as [$L, $a, $b]
+  | ((($a * $a + $b * $b) | sqrt)) as $c
+  | (if $c == 0 then 1 else ([$c * 4, 0.4] | min) / $c end) as $f
+  | [$L, $a * $f, $b * $f] | fromOklab
+  | map(. / 255 | pow(.; 3) | . * 255 | round);
+
+# "Softer": switch off the weakest of the three LEDs, so at most two are lit.
+def medium: (min) as $lowest | (index($lowest)) as $i | .[$i] = 0;
+
+# "Battery saver": the strongest of red, green and blue only, or off for dark colors.
+def eco:
+  (max) as $top
+  | if $top < 20 then [0, 0, 0]
+    elif .[0] == $top then [255, 0, 0]
+    elif .[1] == $top then [0, 255, 0]
+    else [0, 0, 255] end;
+
+# The editor color (hex) as the LED color (hex).
+def ledColor($style):
+  parseRgb
+  | if $style == "bright" then bright
+    elif $style == "medium" then medium
+    elif $style == "eco" then eco
+    else . end
+  | toHex;
+
+# Rough battery use of an LED color, 0 to 100.
+def power: parseRgb | (.[0] * 0.30 + .[1] * 0.35 + .[2] * 0.35) / 255 * 100;
+
+# ---- Keys ------------------------------------------------------------------
+
+def noRgb:
+  (.decoration?.description? // "") as $d
+  | if ($d | type) == "string" then ($d | sub("^\\s+"; "") | ascii_downcase | startswith("no_rgb")) else false end;
+
+# The name a key gets in the lighting layer: a color name, ___ (off) or _t_ (transparent).
+def keyName($names):
+  if noRgb then "___"
+  else (.decoration?.background? | rgbHex) as $h
+    | if $h != "" then ($names[$h] // "___")
+      elif ((.value // "") | ascii_downcase) == "&trans" then "_t_"
+      else "___" end
+  end;
+
+# Which lock a key switches, if any: "caps", "num" or "scroll". Only a plain key press counts;
+# Caps Word does not change the lock state the keyboard LED reports, so it is not included.
+def lockOf:
+  if (.value // "") == "&kp" and ((.params // []) | length) == 1 and ((.params[0].params // []) | length) == 0
+  then (.params[0].value // "") as $c
+    | if ($c | IN("CAPS", "CAPSLOCK", "CLCK", "LCAPS", "LOCKING_CAPS")) then "caps"
+      elif ($c | IN("KP_NUM", "KP_NUMLOCK", "KP_NLCK", "LNLCK", "LOCKING_NUM")) then "num"
+      elif ($c | IN("SLCK", "SCROLLLOCK", "SCLK", "LSLCK", "LOCKING_SCROLL")) then "scroll"
+      else null end
+  else null end;
+
+# ---- Writing into Custom Devicetree ------------------------------------------
+
+# Everything after the end marker of one section.
+def afterEnd: split(END) | .[1:] | join(END);
+
+# Put $block where the earlier lighting was. Null when there is none to replace.
+def replaceBlock($old; $block):
+  ($old | split(START)) as $parts
+  | if ($parts | length) > 1 then
+      if ($parts[1:] | any(contains(END) | not)) then error("Your Custom Devicetree has a PER-KEY-RGB start line without its end line. Fix or remove it first.")
+      else $parts[0] + $block + ($parts[1:] | map(afterEnd) | join(""))
+      end
+    else
+      ($old | split(OLD_START)) as $legacy
+      | if ($legacy | length) == 2 and ($legacy[1] | split(OLD_END) | length) == 2
+        then $legacy[0] + $block + ($legacy[1] | split(OLD_END) | .[1])
+        else null end
+    end;
+
+def setParam($name; $value):
+  (.config_parameters // []) as $c
+  | if ($c | map(.paramName) | index($name)) != null
+    then .config_parameters = ($c | map(if .paramName == $name then .value = $value else . end))
+    else .config_parameters = ($c + [{paramName: $name, value: $value}]) end;
+
+# ---- Main --------------------------------------------------------------------
+
+(if type == "object" and .keymap? then .keymap else . end) as $km
+| if ($km | type) != "object" or ($km.layers | type) != "array" or ($km.layers | length) == 0
+  then error("This file has no layers, so there are no key colors to read.")
+  elif ($km.keyboard != "glove80" and $km.keyboard != "go60")
+  then error("This automation supports the Glove80 and Go60, not \($km.keyboard // "an unknown keyboard").")
+  else
+    $km.keyboard as $kb
+    | ($km.layer_names // []) as $names
+    | (if $kb == "glove80" then 80 else 60 end) as $need
+
+    # Lock-key indicators: the locks to show and the color they light up in
+    | {caps: "BCL", num: "BNL", scroll: "BSL"} as $lockMacro
+    | (if $lock_leds == "caps" then ["caps"] elif $lock_leds == "all" then ["caps", "num", "scroll"] else [] end) as $wanted
+    | ($indicator_color | sub("^\\s*#?"; "") | sub("\\s+$"; "") | ascii_upcase) as $indHex
+    | (if ($wanted | length) > 0 and ($indHex | test("^[0-9A-F]{6}$") | not)
+       then error("The indicator color must be a 6-digit hex color such as 0000FF.") else . end)
+
+    # 1. The distinct key colors in order of appearance, black (unlit) excluded
+    | ([$km.layers[][] | (.decoration?.background? | rgbHex) | select(. != "" and . != "000000")]
+       | reduce .[] as $c ([]; if index($c) != null then . else . + [$c] end)) as $colors
+    | ([$km.layers[][] | (.decoration?.background? | rgbHex) | select(. != "" and . != "000000")] | length) as $coloredKeys
+    | if ($colors | length) == 0
+      then . + {_flowReport: {changed: false, message: "None of your keys has a color yet, so there is nothing to light up. Color some keys first, then run this again.", lines: [], log: ["no key backgrounds found"]}}
+      else
+
+    # 2. The LED color for each, and which editor colors end up the same
+    ($colors | map({editor: ., led: ledColor($look)})
+     | reduce .[] as $c ([];
+         (map(.led) | index($c.led)) as $i
+         | if $i == null then . + [{led: $c.led, editors: [$c.editor]}] else .[$i].editors += [$c.editor] end)) as $groups
+
+    # 3. Give each LED color a short name: C01, C02, ... (a color that comes out black is off)
+    | (reduce range(0; $groups | length) as $i ({n: 0, names: {}, led: {}};
+        $groups[$i] as $g
+        | if $g.led == "000000" then reduce $g.editors[] as $e (.; .names[$e] = "___")
+          else .n += 1
+            | ("C" + (.n | tostring | if length == 1 then "0" + . else . end)) as $id
+            | (reduce $g.editors[] as $e (.; .names[$e] = $id))
+            | .led[$id] = $g.led
+          end)) as $naming
+    | $naming.names as $colorNames
+
+    # 4. One block per layer, laid out like the keyboard
+    | ($km.layers | to_entries | map(
+        .key as $idx
+        | (($names)[$idx] // "Layer_\($idx)") as $layerName
+        | (.value | length) as $keyCount
+        | (if $keyCount < $need or ($kb == "glove80" and $keyCount != 80) or ($kb == "go60" and $keyCount != 60 and $keyCount != 62)
+           then error("Layer \($layerName) has \($keyCount) keys, but the \(if $kb == "glove80" then "Glove80 has 80 keys" else "Go60 has 60 keys, plus 2 touchpad positions" end).")
+           else . end)
+        | (.value | map(keyName($colorNames))) as $base
+        | (.value[0:$need] | map(lockOf)) as $locks
+        | (reduce $wanted[] as $t ($base; ($locks | index($t)) as $p | if $p == null then . else .[$p] = $lockMacro[$t] end)) as $m
+        | {name: $layerName, m: $m, ind: [$wanted[] | select(. as $t | ($locks | index($t)) != null)], blank: ($m | all(. == "_t_" or . == "___")),
+           grid: (if $kb == "glove80" then
+      "          \($m[0:5]|join(" "))                                             \($m[5:10]|join(" "))\n" +
+      "          \($m[10:16]|join(" "))                                     \($m[16:22]|join(" "))\n" +
+      "          \($m[22:28]|join(" "))                                     \($m[28:34]|join(" "))\n" +
+      "          \($m[34:40]|join(" "))                                     \($m[40:46]|join(" "))\n" +
+      "          \($m[46:52]|join(" "))     \($m[52:55]|join(" "))     \($m[55:58]|join(" "))     \($m[58:64]|join(" "))\n" +
+      "          \($m[64:69]|join(" "))         \($m[69:72]|join(" "))     \($m[72:75]|join(" "))         \($m[75:80]|join(" "))"
+    else
+      "          \($m[0:6]|join(" "))                                     \($m[6:12]|join(" "))\n" +
+      "          \($m[12:18]|join(" "))                                     \($m[18:24]|join(" "))\n" +
+      "          \($m[24:30]|join(" "))                                     \($m[30:36]|join(" "))\n" +
+      "          \($m[36:42]|join(" "))                                     \($m[42:48]|join(" "))\n" +
+      "                  \($m[48:51]|join(" "))                                             \($m[51:54]|join(" "))\n" +
+      "                                      \($m[54:57]|join(" "))     \($m[57:60]|join(" "))"
+    end)}
+      )) as $all
+    | ($all | map(select(($which_layers == "all") or (.blank | not)))) as $written
+    | if ($written | length) == 0
+      then . + {_flowReport: {changed: false, message: "None of the keys that would be lit has a color (keys marked no_rgb stay dark), so there is nothing to write.", lines: [], log: ["no layer has a lit key"]}}
+      else
+    (if $fade_delay < 0 then "" else "\n        fade-delay = <\($fade_delay | floor)>;" end) as $fade
+    | ($written | map("\n      #ifdef LAYER_\(.name)\n      \(.name) {\n        bindings = <\n\(.grid)\n        >;\n        layer-id = <LAYER_\(.name)>;\($fade)\n      };\n      #endif\n") | join("")) as $layersOutput
+    | ($naming.led | to_entries) as $used
+    | (["caps", "num", "scroll"] | map(select(. as $t | $written | any(.ind | index($t) != null)))) as $lockTypes
+    | ({caps: "&ug_cl", num: "&ug_nl", scroll: "&ug_sl"}) as $lockFunc
+    | ("  // ___ RGB Palette (Optimized & Deduplicated) ___\n"
+       + ($used | map("  #define \(.key) &ug 0x\(.value)\n") | join(""))
+       + "  #define _t_ &trans\n  #define ___ &ug 0x000000\n"
+       + ($lockTypes | map("  #define \($lockMacro[.]) \($lockFunc[.]) 0x000000 0x\($indHex)\n") | join(""))) as $palette
+    | ("  // ___ Cleanup ___\n" + ($used | map("  #undef \(.key)\n") | join("")) + "  #undef _t_\n  #undef ___\n"
+       + ($lockTypes | map("  #undef \($lockMacro[.])\n") | join(""))) as $undef
+    | (START + "\n" + OLD_START + "\n" + $palette
+       + "  / {\n    underglow-layer {\n      compatible = \"zmk,underglow-layer\";\n"
+       + $layersOutput + "    };\n  };\n" + $undef + "#endif\n" + END) as $block
+
+    # 5. Merge into Custom Devicetree and set the firmware options
+    | ($km.custom_devicetree // "") as $old
+    | replaceBlock($old; $block) as $merged
+
+    # Doubts worth telling the person about: several earlier sections, an old unmarked one, or lighting code of their own
+    | (replaceBlock($old; "") // $old) as $outside
+    | (($old | split(START) | length) - 1) as $oldSections
+    | ($merged != null and $oldSections == 0) as $replacedUnmarked
+    | ($outside | test("zmk,underglow-layer|underglow-layer\\s*\\{|rgb_colors\\.h")) as $otherLighting
+    | (if $merged != null then $merged
+       elif ($old | test("^\\s*$")) then $block
+       else ($old | sub("\\s+$"; "")) + "\n\n" + $block end) as $new
+    | ($km | .custom_devicetree = $new
+       | setParam("EXPERIMENTAL_RGB_LAYER"; "y")
+       | if $auto_off == "yes" then setParam("EXPERIMENTAL_RGB_UNDERGLOW_AUTO_OFF_IDLE"; "y")
+         elif $auto_off == "no" then setParam("EXPERIMENTAL_RGB_UNDERGLOW_AUTO_OFF_IDLE"; "n")
+         else . end) as $newKm
+
+    # 6. Report
+    | ([$written[].m[] | select(. != "___" and . != "_t_") | $naming.led[.] | select(. != null) | power]) as $powers
+    | (if ($powers | length) == 0 then null else (($powers | add) / ($powers | length)) end) as $avg
+    | if $newKm == $km
+      then . + {_flowReport: {changed: false, message: "Nothing was changed: your Custom Devicetree already holds exactly this lighting.", lines: [], log: ["generated block identical to the existing one"]}}
+      else
+        ((if type == "object" and .keymap? then .keymap else . end) = $newKm)
+        | . + {_flowReport: {
+            changed: true,
+            lines: [{ok: true, text: "Found \($colors | length) colors on \($coloredKeys) keys across \($km.layers | length) layers"},
+                    {ok: true, text: (if ($used | length) < ($colors | length)
+                                      then "Matched them to \($used | length) LED colors (\($colors | length) became \($used | length) because some looked the same on the keyboard)"
+                                      else "Gave each of them its own LED color" end)},
+                    {ok: true, text: "Wrote lighting for \($written | length) of \($all | length) layers\(if ($written | length) < ($all | length) then " (layers without colors were left out)" else "" end)"},
+                    ($wanted[] as $t
+                     | {caps: "Caps Lock", num: "Num Lock", scroll: "Scroll Lock"}[$t] as $lockName
+                     | ([$written[] | select(.ind | index($t) != null) | .name]) as $on
+                     | if ($on | length) > 0 then {ok: true, text: "\($lockName) indicator on the \($lockName) key of layer\(if ($on | length) > 1 then "s" else "" end) \($on | join(", "))"}
+                       else {ok: false, text: "No \($lockName) key found on any layer, so there is no \($lockName) indicator (a lock set on a combo is not found)"} end),
+                    (if $avg == null then empty
+                     else {ok: true, text: "Estimated battery use of the lit keys: \(if $avg <= 35 then "LOW" elif $avg <= 70 then "MEDIUM" else "HIGH" end) (\($avg | round)% of full brightness on average)"} end),
+                    {ok: true, text: (if $merged != null then "Replaced the lighting from an earlier run, the rest of your Custom Devicetree is untouched"
+                                      elif ($old | test("^\\s*$")) then "Wrote the lighting into your empty Custom Devicetree"
+                                      else "Added the lighting after your own Custom Devicetree code, which is untouched" end)},
+                    (if $oldSections > 1 then {ok: false, text: "Your Custom Devicetree had \($oldSections) lighting sections from earlier runs. They were replaced by this one."} else empty end),
+                    (if $replacedUnmarked then {ok: false, text: "Replaced a lighting section without marker lines, written by an older version. If you wrote that code yourself, check your Custom Devicetree."} else empty end),
+                    (if $otherLighting then {ok: false, text: "Your Custom Devicetree also has other per-key lighting code outside the marker lines. Two lighting sections can clash when you build, so remove one of them."} else empty end),
+                    {ok: true, text: "Turned on the RGB layer setting\(if $auto_off == "yes" then " and switching off when idle" elif $auto_off == "no" then " and keeping the lights on when idle" else "" end)"}],
+            log: (["\($kb), style \($look), colors \($colors | join(" "))"]
+                  + [$used[] | "\(.key) = \(.value)"]
+                  + ["block \($block | split("\n") | length) lines, previous Custom Devicetree \($old | split("\n") | length) lines"])
+          }}
+      end
+      end
+    end
+  end
+'''
+
+category = "Looks & lighting"
+
+successMessage = "Your lighting was added to Custom Devicetree. In the Layout Editor choose the PR36 community firmware, build and flash it, then do a configuration factory reset on the keyboard to see the colors."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["glove80", "go60"]
+icon = "🎨"
+keywords = ["underglow", "led", "lighting", "rgb", "pr36"]
+
+[[param]]
+id = "look"
+label = "Lighting style"
+type = "select"
+options = ["bright", "original", "medium", "eco"]
+labels = ["Bright colors (recommended)", "Same as on screen", "Softer, saves battery (at most 2 LEDs per key)", "Battery saver (red, green or blue only)"]
+default = "bright"
+
+[[param]]
+id = "which_layers"
+label = "Layers to light"
+type = "select"
+options = ["colored", "all"]
+labels = ["Only layers where you colored keys", "All layers"]
+default = "colored"
+
+[[param]]
+id = "fade_delay"
+label = "Fade between layers (milliseconds, -1 for none)"
+type = "number"
+default = "180"
+
+[[param]]
+id = "lock_leds"
+label = "Lock-key indicators"
+type = "select"
+options = ["none", "caps", "all"]
+labels = ["None", "Caps Lock", "Caps, Num and Scroll Lock"]
+default = "none"
+
+[[param]]
+id = "indicator_color"
+label = "Indicator color (hex, used when indicators are on)"
+type = "text"
+default = "0000FF"
+
+[[param]]
+id = "auto_off"
+label = "Switch the lights off when idle"
+type = "select"
+options = ["yes", "no", "leave"]
+labels = ["Yes, to save battery", "No, keep them on", "Leave my current setting alone"]
+default = "yes"

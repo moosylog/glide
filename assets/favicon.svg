@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1c2230"/>
+      <stop offset="1" stop-color="#11151f"/>
+    </linearGradient>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffb648"/>
+      <stop offset="0.55" stop-color="#ff8a1e"/>
+      <stop offset="1" stop-color="#ef6c12"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.16"/>
+      <stop offset="0.4" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- keycap-style rounded square body -->
+  <rect x="6" y="6" width="244" height="244" rx="52" fill="url(#bg)"/>
+  <rect x="6" y="6" width="244" height="244" rx="52" fill="none" stroke="#000000" stroke-opacity="0.35" stroke-width="2"/>
+
+  <!-- top sheen, like a keycap catching light -->
+  <rect x="6" y="6" width="244" height="120" rx="52" fill="url(#sheen)"/>
+
+  <!-- monogram G: a ring with a gap plus an inward bar, drawn as one stroked path -->
+  <path d="M 171 74
+           A 62 62 0 1 0 171 182
+           L 171 138
+           L 132 138"
+        fill="none"
+        stroke="url(#g)"
+        stroke-width="26"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
+
+</svg>

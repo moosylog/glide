@@ -1,0 +1,8 @@
+GLIDE uses the following third-party software. Each stays under its own licence.
+
+React and ReactDOM (MIT) - Copyright (c) Meta Platforms, Inc. and affiliates. Loaded from unpkg.com.
+Ajv (MIT) - Copyright (c) Evgeny Poberezkin and contributors. Included as vendor/ajv.min.js.
+jq (MIT) and jq-web (ISC) - the jq language and its WebAssembly build. Loaded from cdn.jsdelivr.net when a Flow runs.
+Tailwind CSS (MIT) - Copyright (c) Tailwind Labs, Inc. The generated stylesheet contains Tailwind's output.
+
+The full licence texts are available from each project's website.

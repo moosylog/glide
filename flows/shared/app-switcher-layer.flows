@@ -1,0 +1,125 @@
+uid = "app_switcher_macro"
+
+title = "App switcher with navigation"
+
+subtitle = "Alt-Tab plus arrows, copy and paste"
+
+description = '''
+A fuller app switcher with a navigation layer (arrows, copy, paste, cut) to go with it.
+
+Adds the **Flows_Nav** layer and a **mod_tab_chord_v2_TKZ** behavior — assign that behavior to a key, set its layer to Flows_Nav, and its modifier to **LCTRL** (macOS) or **LALT**/**LGUI** (Windows).'''
+
+script = '''
+# ==============================================================================
+# App switcher with navigation
+#
+# Adds two macros and one layer (nothing existing is changed):
+#   &mod_tab_v1_TKZ        hold a modifier (parameter: its key code), tap Tab, release
+#   &mod_tab_chord_v2_TKZ  the same, plus a temporary layer while held (parameters: code, layer)
+#   Flows_Nav layer        arrows, Home/End/PgUp/PgDn, cut/copy/paste and modifiers, to steer
+#                          the switcher while it is open
+# Anything with the same name that already exists is kept as it is and reported.
+# ==============================================================================
+
+# ---- macros ------------------------------------------------------------------------------------------
+def step($name): {value: $name, params: []};                       # &macro_press, &macro_tap, ...
+def key($behavior; $code): {value: $behavior, params: [{value: $code}]};
+def placeholder($behavior): key($behavior; "MACRO_PLACEHOLDER");   # filled in by the key that uses the macro
+
+def newMacros: [
+  {
+    name: "&mod_tab_chord_v2_TKZ",
+    description: "mod_tab_switcher_chord -  TailorKey",
+    waitMs: 0, tapMs: 0,
+    bindings: [
+      step("&macro_press"), step("&macro_param_2to1"), placeholder("&mo"),
+      step("&macro_press"), step("&macro_param_1to1"), placeholder("&mod_tab_v1_TKZ"),
+      step("&macro_pause_for_release"), step("&macro_release"),
+      step("&macro_param_1to1"), placeholder("&mod_tab_v1_TKZ"),
+      step("&macro_release"), step("&macro_param_2to1"), placeholder("&mo")
+    ],
+    params: ["code", "layer"]
+  },
+  {
+    name: "&mod_tab_v1_TKZ",
+    description: "mod_tab_switcher - TailorKey\n\n",
+    waitMs: 0, tapMs: 0,
+    bindings: [
+      step("&macro_press"), step("&macro_param_1to1"), placeholder("&kp"),
+      step("&macro_tap"), key("&kp"; "TAB"),
+      step("&macro_pause_for_release"), step("&macro_release"),
+      step("&macro_param_1to1"), placeholder("&kp")
+    ],
+    params: ["code"]
+  }
+];
+
+# ---- the navigation layer ----------------------------------------------------------------------------
+def LAYER_NAME: "Flows_Nav";
+def MAX_LAYERS: 32;                                                  # MoErgo's limit (schemas/glove80-layout.schema.json)
+
+def none: {value: "&none"};
+def grey: {value: "&none", decoration: {background: "#dcdcdcff"}};   # unused thumb keys, marked on screen
+def plain($code; $bg): key("&kp"; $code) + {decoration: {background: $bg}};
+def chord($mod; $code; $caption; $icon):                               # Ctrl+X / C / V with a labelled, coloured key
+  {value: "&kp", params: [{value: $mod, params: [{value: $code}]}], decoration: {label: $caption, icon: $icon, background: "#fffec9"}};
+def cut: chord("LC"; "X"; "Cut"; "fa-cut");
+def copy: chord("LC"; "C"; "Copy"; "fa-copy");
+def paste: chord("LC"; "V"; "Paste"; "fa-paste");
+def modKey($code): plain($code; "#f2f2f2ff");
+def sticky: key("&sk"; "LSHFT") + {decoration: {label: "StckyShft", background: "#f2f2f2ff"}};
+def arrow($code): plain($code; "#d9f9c9");
+# The eleven keys of the main block, identical on both keyboards.
+def middle: [sticky, modKey("LGUI"), modKey("LALT"), modKey("LCTRL"), modKey("LSHFT"), copy, copy, arrow("LEFT"), arrow("UP"), arrow("DOWN"), arrow("RIGHT")];
+def paste_and_nav: [arrow("HOME"), arrow("PG_UP"), arrow("PG_DN"), arrow("END")];
+
+# [start position, [keys…]] runs; positions not listed stay &none.
+def runs($go60):
+  if $go60 then
+    [[17, [cut, cut]], [24, middle], [41, [paste, paste] + paste_and_nav], [55, [grey, grey]]]
+  else
+    [[27, [cut, cut]], [34, middle], [51, [paste, grey, grey, grey]], [58, [paste] + paste_and_nav], [70, [grey, grey]]]
+  end;
+
+# A layer as long as the base layer, so every layer in the layout has the same number of keys
+# (the old script always made 60 keys, two short of a 62-key Go60 layout).
+def navLayer($go60; $size):
+  reduce runs($go60)[] as $run ([range(0; $size)] | map(none);
+    reduce range(0; $run[1] | length) as $i (.; .[$run[0] + $i] = $run[1][$i]));
+
+# ---- main --------------------------------------------------------------------------------------------
+(.keymap // .) as $km
+| ((($km.keyboard? // .keyboard? // "glove80") | tostring | ascii_downcase) == "go60") as $go60
+| if ($km | type) != "object" or ($km.layers | type) != "array" or ($km.layers | length) == 0 then error("This file has no layers, so there is nothing to add the macros and layer to.") else . end
+| ([($km.macros, $km.holdTaps, $km.tapDances, $km.modMorphs, $km.stickyKeys)[]? | .name]) as $taken
+| ([newMacros[] | select(.name | IN($taken[]) | not)]) as $addMacros
+| (($km.layer_names // []) | index(LAYER_NAME) == null) as $addLayer
+| (if $go60 then 60 else 80 end) as $minimum
+| ($km.layers[0] | length | if . >= $minimum then . else $minimum end) as $length
+| if ($addMacros | length) == 0 and ($addLayer | not) then
+    . + {_flowReport: {changed: false, message: "Your layout already has the \(LAYER_NAME) layer and both macros, so nothing was changed.", lines: [], log: ["all names already present"]}}
+  elif $addLayer and ($km.layers | length) >= MAX_LAYERS then
+    error("Your layout already has the maximum of \(MAX_LAYERS) layers, so the \(LAYER_NAME) layer can't be added. Delete a layer you don't use and try again.")
+  else
+    (.keymap // .) |= (
+      .macros = ((.macros // []) + $addMacros)
+      | if $addLayer then
+          .layer_names = ((.layer_names // []) + [LAYER_NAME]) | .layers += [navLayer($go60; $length)]
+        else . end
+    )
+    | . + {_flowReport: {
+        changed: true,
+        lines: ([newMacros[] | {ok: (.name | IN($taken[]) | not), text: (if (.name | IN($taken[])) then "\(.name) already existed and was kept as it is" else "Added the \(.name) macro" end)}]
+                + [{ok: $addLayer, text: (if $addLayer then "Added the \(LAYER_NAME) layer (\($length) keys)" else "The \(LAYER_NAME) layer already existed and was kept as it is" end)}]),
+        log: ["keyboard \(if $go60 then "go60" else "glove80" end), layer length \($length)", "macros added: \($addMacros | map(.name) | join(", "))", "layer added: \($addLayer)"]}}
+  end'''
+
+category = "Shortcuts & macros"
+
+successMessage = "A new 'Flows_Nav' layer and a 'mod_tab_chord_v2_TKZ' behavior were added. Assign that behavior to a key, set its layer to Flows_Nav, and its modifier to LCTRL (macOS) or LALT / LGUI (Windows)."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "💫"
+keywords = ["alt tab", "cmd tab", "navigation", "arrows"]

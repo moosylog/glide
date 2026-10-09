@@ -1,0 +1,107 @@
+uid = "gaming_go60"
+
+title = "Gaming layer"
+
+subtitle = "For Go60, made for the left hand"
+
+description = '''
+Adds a dedicated gaming layer (**Gaming**) to your Go60, optimized for the left hand.
+
+⚠️ You still need to assign a key or combo to switch to it — this automation doesn't do that for you.'''
+
+script = '''
+# ==============================================================================
+# GO60 GAMING LAYER
+# ==============================================================================
+# Adds one layer, "Gaming", at the end of your layers. Nothing else is touched:
+# no other layer, macro or setting changes, and the layout's creator stays yours.
+#
+# It stops, and changes nothing, when: the file has no layers, its first layer does
+# not have the right number of keys, it already has a layer named Gaming, or all 32
+# layers are in use. (The app itself already refuses a file for another keyboard.)
+# ==============================================================================
+
+def GAMING_LAYER: "Gaming";
+def MAX_LAYERS: 32;
+
+def kp($code):
+  { "value": "&kp", "params": [{ "value": $code, "params": [] }] };
+
+def kp_mod($code; $modifier):
+  { "value": "&kp", "params": [{ "value": $modifier, "params": [{ "value": $code, "params": [] }] }] };
+
+# Key position and key code. A third item is a modifier held with the key.
+[
+    # Number Row (0-12)
+    [0,"ESC"], [1,"N1"], [2,"N2"], [3,"N3"], [4,"N4"], [5,"N5"], [6,"N6"],
+    [7,"N7"], [8,"N8"], [9,"N9"], [10,"N0"], [11,"MINUS"], [12,"RET"],
+
+    # Top Row (13-24)
+    [13,"TAB"], [14,"Q"], [15,"W"], [16,"E"], [17,"R"], [18,"Y"], [19,"U"],
+    [20,"I"], [21,"O"], [22,"P"], [24,"GRAVE"],
+
+    # Home Row (25-36)
+    [25,"LSHFT"], [26,"A"], [27,"S"], [28,"D"], [29,"F"], [30,"H"],
+    [31,"J"], [32,"K"], [33,"L"], [34,"SEMI"], [36,"B"],
+
+    # Bottom Row (37-46)
+    [37,"LCTRL"], [38,"Z"], [39,"X"], [40,"C"], [41,"V"], [42,"N"],
+    [43,"M"], [44,"UP"],
+
+    # Thumb Cluster & Modifiers (47-59)
+    [47,"LGUI"], [48,"LALT"], [49,"T"], [50,"G"], [51,"LEFT"],
+    [52,"DOWN"], [53,"RIGHT"], [54,"SPACE"],
+    [55,"LSHFT"], [56,"LCTRL"], [57,"BSPC"], [58,"LALT"], [59,"RET"],
+
+    # Special Shifted Symbols
+    [23,"EQUAL","LS"], [35,"SQT","LS"], [45,"COMMA","LS"], [46,"DOT","LS"]
+] as $mapping |
+
+
+(if .keymap then .keymap else . end) |= (
+
+  # --- CHECKS: stop before changing anything ---
+  (if (.layers | type) != "array" or (.layers | length) == 0
+   then error("This file has no layers, so there is nothing to add the Gaming layer to.")
+   else . end) |
+  ((.layers[0] | length) as $n
+   | if $n != 60 and $n != 62
+     then error("The first layer has \($n) keys, but the Go60 has 60 keys (plus 2 touchpad positions).")
+     else . end) |
+  (if ((.layer_names // []) | index(GAMING_LAYER)) != null
+   then error("Your layout already has a layer named Gaming, so nothing was added. Rename or remove that layer first if you want a new one.")
+   else . end) |
+  (if (.layers | length) >= MAX_LAYERS
+   then error("The Gaming layer needs one free layer, and your layout already has all \(MAX_LAYERS) allowed. Remove a layer first.")
+   else . end) |
+
+  # --- BUILD: every key starts transparent, then the game keys are filled in ---
+  (.layers | length) as $new_idx |
+  (.layers[0] | length) as $key_count |
+  .layer_names = ((.layer_names // []) + [GAMING_LAYER]) |
+  .layers[$new_idx] = [range($key_count) | { "value": "&trans", "params": [] }] |
+  reduce $mapping[] as $map (.;
+    if ($map | length) == 3
+    then .layers[$new_idx][$map[0]] = kp_mod($map[1]; $map[2])
+    else .layers[$new_idx][$map[0]] = kp($map[1])
+    end)
+)
+
+# --- REPORT ---
+| (if type == "object" and .keymap? then .keymap else . end) as $after
+| ($after.layers | length) as $count
+| . + {_flowReport: {
+    changed: true,
+    lines: [{ok: true, text: "Added the Gaming layer (layer \($count)) with \($mapping | length) game keys, made for the left hand"}],
+    log: ["layers: \($count - 1) before, \($count) after", "keys per layer: \($after.layers[0] | length)"]
+  }}'''
+
+category = "Gaming"
+
+successMessage = "A new 'Gaming' layer was added to your Go60. To use it, assign a key or combo that switches to it — this automation doesn't do that for you."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60"]
+icon = "🎮"
+keywords = ["game", "wasd", "fps"]

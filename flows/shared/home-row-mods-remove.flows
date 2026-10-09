@@ -1,0 +1,190 @@
+uid = "hrm_remove"
+
+title = "Remove home-row mods"
+
+subtitle = "Back to plain letters"
+
+description = '''
+Takes home-row mods off your layout — hold-taps, macros and finger layers included — so your base layer types plain letters again.'''
+
+script = '''
+# ==============================================================================
+# 0. SETTINGS & TOGGLES
+# ==============================================================================
+# Set to true to keep colors and UI decorators. Set to false for a clean wipe.
+def PRESERVE_DECORATORS: false; 
+
+# ==============================================================================
+# 1. HARDWARE ABSTRACTION LAYER (HAL)
+# ==============================================================================
+def GetHomeIndices:
+  if .layout.keys then
+    (.layout.keys | length) as $len |
+    if $len > 70 then [35, 36, 37, 38, 41, 42, 43, 44] # Glove80
+    else [25, 26, 27, 28, 31, 32, 33, 34]              # Go60
+    end
+  else [25, 26, 27, 28, 31, 32, 33, 34] # Default Fallback
+  end;
+
+# Layer numbers are usually numbers, but some layouts store them as text ("2"), and the text stays text.
+def LayerNumber: if type == "string" and test("^[0-9]+$") then tonumber else . end;
+
+# Where a layer number ends up when the layers in $gone are deleted: a layer after them moves down,
+# a key that pointed at a deleted layer points at the first layer instead.
+def moveLayer($gone):
+  . as $was
+  | (. | LayerNumber) as $n
+  | if ($n | type) != "number" then $was
+    else (if ($gone | index($n)) != null then 0 else $n - ([$gone[] | select(. < $n)] | length) end) as $moved
+      | if ($was | type) == "string" then ($moved | tostring) else $moved end
+    end;
+
+# Only the layer number of a layer key is ever moved, never other numbers such as macro wait times or
+# hold-tap timings. Layer keys are the ZMK ones (mo, to, tog, sl, lt), your own hold-taps that start
+# with one of them, and macros that pass one of their own parameters to one of them.
+# Gives name -> positions of the layer number among the key's parameters.
+def layer_params:
+  . as $km
+  | {"mo": [0], "to": [0], "tog": [0], "sl": [0], "lt": [0]} as $zmk
+  | reduce (($km.holdTaps // [])[] | select(.name != null)) as $h ($zmk;
+      ([($h.bindings // []) | to_entries[] | select(.value | ltrimstr("&") | IN("mo", "to", "tog", "sl", "lt")) | .key]) as $at
+      | if ($at | length) > 0 then .[$h.name | ltrimstr("&")] = $at else . end)
+  | reduce (($km.macros // [])[] | select(.name != null)) as $m (.;
+      ([range(0; (($m.bindings // []) | length) - 1) as $i
+        | $m.bindings[$i] as $a | $m.bindings[$i + 1] as $b
+        | select(($a.value // "") | startswith("&macro_param_"))
+        | select(($b.value // "") | ltrimstr("&") | IN("mo", "to", "tog", "sl", "lt"))
+        | (($a.value | ltrimstr("&macro_param_") | .[0:1] | tonumber) - 1)] | unique) as $at
+      | if ($at | length) > 0 then .[$m.name | ltrimstr("&")] = $at else . end);
+
+# The names of the home-row behaviors on the first layer's home row. Standard ZMK behaviors are never
+# named here, so layers such as Cursor or Gaming stay safe.
+def purge_names:
+  GetHomeIndices as $home_row
+  | [.layers[0][($home_row[])].value | select(. != null)]
+  | map(ltrimstr("&"))
+  | map(select(IN("kp", "mt", "lt", "mo", "sl", "sk", "tog", "none", "trans") | not));
+
+# Is this key one of the home-row mods?
+def is_hrm_key($to_purge):
+  .value | ltrimstr("&") | (startswith("HRM_") or IN($to_purge[]));
+
+# ==============================================================================
+# 2. MAIN TRANSFORMATION
+# ==============================================================================
+# The layout as it is now, to tell afterwards what changed.
+(if type == "object" and .keymap? then .keymap else . end) as $before |
+
+if (type != "object") then . else
+  (.keymap // .) |= (
+    
+    # SETUP
+    [ "LeftIndex", "LeftMiddy", "LeftRingy", "LeftPinky", 
+      "RightIndex", "RightMiddy", "RightRingy", "RightPinky" ] as $targets |
+    (GetHomeIndices) as $home_row |
+
+    # STAGE 1: IDENTIFY HRM NAMES (Recursive lookup)
+    # Collects names from Layer 0 home row. 
+    # EXPLICITLY ignores standard ZMK behaviors to protect layers like Cursor/Gaming.
+    purge_names as $to_purge |
+    
+    # STAGE 2: GLOBAL KEY REVERSION (Preserves Styling)
+    # Scans every layer. Converts any key referencing an HRM behavior to &kp.
+    .layers |= map(
+      map(
+        if is_hrm_key($to_purge) then
+          (.params | if type == "array" and length > 0 then . else [{ "value": "NONE" }] end) as $p |
+          (if ($p | length > 1) then $p[1].value else $p[0].value end) as $keycode |
+          
+          # NEW BINDING OBJECT
+          { "value": "&kp", "params": [{ "value": $keycode }] } as $new_key |
+          
+          # TOGGLE LOGIC: Preserve existing decorators or replace entirely
+          # Force overwrite the params array to prevent index-merging corruption
+          if PRESERVE_DECORATORS then 
+            (. * $new_key | .params = $new_key.params)
+          else 
+            $new_key 
+          end
+        else . end
+      )
+    ) |
+
+    # STAGE 3: REGISTRY PURGE
+    ( .holdTaps, .macros, .behaviors ) |= (
+      if type == "array" then
+        map(select(.name | type == "string" and ((. | IN($to_purge[])) or (ltrimstr("&") | startswith("HRM_"))) | not))
+      else . end
+    ) |
+
+    # STAGE 4: SURGICAL LAYER DELETION & RE-INDEXING
+    if (.layer_names | type == "array") then
+      ([.layer_names | to_entries[] | select(.value | IN($targets[])) | .key] | sort) as $delete_list |
+
+      # EXPLICIT GUARD: Only run deletion and re-indexing if layers were actually found
+      if ($delete_list | length > 0) then
+        layer_params as $lp |
+        (.layers |= [to_entries[] | select(.key | IN($delete_list[]) | not) | .value]) |
+        (.layer_names |= [to_entries[] | select(.key | IN($delete_list[]) | not) | .value]) |
+
+        # Re-index the layer number of every layer key, in one pass (see layer_params above)
+        (.. | objects | select((.value | type) == "string" and (.params | type) == "array" and $lp[.value | ltrimstr("&")] != null)) |= (
+          . as $b
+          | reduce $lp[$b.value | ltrimstr("&")][] as $i (.;
+              if (.params[$i] | type) == "object" and (.params[$i] | has("value")) then .params[$i].value |= moveLayer($delete_list) else . end)
+        ) |
+
+        # Combo Layer Requirements Sync
+        .combos[]? |= (
+          if has("layers") and (.layers | type) == "array" then
+            .layers |= map(select(((. | LayerNumber) as $n | $delete_list | index($n)) == null) | moveLayer($delete_list))
+          else . end
+        ) |
+
+        # Input Listener Layer Requirements Sync
+        .inputListeners[]?.nodes[]? |= (
+          if has("layers") and (.layers | type) == "array" then
+            .layers |= map(select(((. | LayerNumber) as $n | $delete_list | index($n)) == null) | moveLayer($delete_list))
+          else . end
+        )
+      else
+        . # Do nothing if no layers matched the targets
+      end
+    else . end |
+
+    # STAGE 5: FINAL CLEANUP
+    # Automatically strip out any null keys (like "macros": null) so the parser doesn't choke
+    with_entries(select(.value != null))
+  )
+end
+
+# --- REPORT ---
+| if type != "object" then . else
+    (if type == "object" and .keymap? then .keymap else . end) as $after
+    | ($before | purge_names) as $purge
+    | ([$before.layers[][] | select(is_hrm_key($purge))] | length) as $reverted
+    | ((($before.layer_names // []) | length) - (($after.layer_names // []) | length)) as $layersGone
+    | ([$before.holdTaps, $before.macros, $before.behaviors | (. // []) | length] | add) as $behBefore
+    | ([$after.holdTaps, $after.macros, $after.behaviors | (. // []) | length] | add) as $behAfter
+    | if $reverted == 0 and $layersGone == 0 and $behBefore == $behAfter then
+        . + {_flowReport: {changed: false, message: "Nothing was changed: no home-row mods were found in this layout.", lines: [], log: ["no home-row mods found"]}}
+      else
+        . + {_flowReport: {
+            changed: true,
+            lines: [{ok: true, text: "Turned \($reverted) home-row mod keys back into plain keys"},
+                    {ok: true, text: "Removed \($behBefore - $behAfter) home-row behaviors (hold-taps and macros)"},
+                    {ok: true, text: (if $layersGone > 0 then "Removed the \($layersGone) finger layers" else "There were no finger layers to remove" end)}],
+            log: ["keys: \($reverted), behaviors removed: \($behBefore - $behAfter), layers removed: \($layersGone)"]
+          }}
+      end
+  end'''
+
+category = "Modifier keys"
+
+successMessage = "Home-row mods are gone, finger layers included. Your base layer types plain letters again."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "❌"
+keywords = ["undo", "hrm", "home row"]

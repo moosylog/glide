@@ -1,0 +1,77 @@
+uid = "fn_combos"
+
+title = "F1–F12 on the Go60"
+
+subtitle = "Number key + the key below it"
+
+description = '''
+Turns your Go60's number row into F1–F12, without giving up a dedicated function row. Press a number key together with the key directly beneath it (e.g. 1 + Q for F1).
+
+⚠️ The F12 combo shown in MoErgo's Layout Editor image doesn't match — check the real F12 combo there before relying on it.'''
+
+script = '''
+# ==============================================================================
+# GO60 F1-F12 COMBOS
+# ==============================================================================
+# Adds 12 combos: each number-row key chorded with the key directly below it gives
+# one function key.
+#
+#  [01][02][03][04][05][06][07][08][09][10][11][12]   number row
+#   +   +   +   +   +   +   +   +   +   +   +   +
+#  [13][14][15][16][17][18][19][20][21][22][23][24]   the row below
+#   =   =   =   =   =   =   =   =   =   =   =   =
+#  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10 F11 F12
+#
+# Running it again replaces its own 12 combos (found by name) instead of adding
+# them twice. Your other combos are never changed; if one of them uses the same two
+# keys as one of these, the report says so.
+# ==============================================================================
+
+def NAME($n): "F\($n)_vertical_combo";
+
+[range(1; 13) | . as $n | {
+  "name": NAME($n),
+  "description": "Auto-generated: F\($n) via column \($n) vertical chord",
+  "binding": { "value": "&kp", "params": [{ "value": "F\($n)", "params": [] }] },
+  "keyPositions": [$n, ($n + 12)],
+  "timeoutMs": 50,
+  "layers": [-1]
+}] as $new |
+
+# The layout as it is now, to tell afterwards what changed.
+(if type == "object" and .keymap? then .keymap else . end) as $before |
+
+(if .keymap then .keymap else . end) |= (
+  ($new | map(.name)) as $ours |
+  (.combos // []) as $existing |
+  .combos = ($existing | map(select(.name as $n | $ours | index($n) | not))) + $new
+)
+
+# --- REPORT ---
+| (if type == "object" and .keymap? then .keymap else . end) as $after
+| ([($before.combos // [])[] | select(.name as $n | $new | map(.name) | index($n))] | length) as $replaced
+| ([($before.combos // [])[] as $c
+    | select(($new | map(.name) | index($c.name)) | not)
+    | ($c.keyPositions // $c.key_positions // []) as $pos
+    | select($new | any(.keyPositions == ($pos | sort)))
+    | $c.name] ) as $clashes
+| if $before == $after then
+    . + {_flowReport: {changed: false, message: "Nothing was changed: the F1–F12 combos are already in your layout.", lines: [], log: ["identical to the existing combos"]}}
+  else
+    . + {_flowReport: {
+        changed: true,
+        lines: ([{ok: true, text: "Added 12 combos, F1 to F12\(if $replaced > 0 then ", replacing \($replaced) from an earlier run" else "" end)"}]
+                + ($clashes | map({ok: false, text: "Your combo \(.) uses the same two keys as one of the new ones. Only one of them can work; change one of them."}))),
+        log: ["combos: \(($before.combos // []) | length) before, \($after.combos | length) after"]
+      }}
+  end'''
+
+category = "Other"
+
+successMessage = "F1–F12 are now available: press a number-row key together with the key directly below it (e.g. 1 + Q for F1)."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60"]
+icon = "🎹"
+keywords = ["f keys", "function row", "f1", "f12"]

@@ -1,0 +1,304 @@
+uid = "auto_decorate"
+
+title = "Auto-label and color keys"
+
+subtitle = "Colors and shortcut labels by theme and OS"
+
+description = '''
+Labels and colors your keys for you: a background color from your chosen theme, and a label for common shortcuts (Copy, Paste, Undo, Save, Find, browser shortcuts …) that knows the difference between Windows/Linux and macOS (⌘C vs Ctrl+C).
+
+**What to change** controls what gets touched: colors and labels together, either one on its own, or strip both off. Arrow keys never get a label — the Layout Editor already shows them as arrows.'''
+
+script = '''
+# ==============================================================================
+# Auto-label and color keys
+#
+# Params: $mode (colors_labels | colors | labels | remove), $os (win | mac), $theme.
+# Colors the home row of the base layer and every shortcut in the table below (on all layers),
+# and gives the shortcuts a short label. Keys that are neither are never touched.
+# "remove" strips ALL decoration (colors, labels, icons) from every key. The result screen
+# says how many keys changed; a run that would change nothing says so instead of "success".
+# ==============================================================================
+
+# --- 1. COLOR THEMES ---
+# pinky..index color the home-row fingers; the others color the shortcut groups.
+def THEMES: {
+  engrammer: {pinky: "#ffcdd2", ring: "#bbdefb", middy: "#dcedc8", index: "#ffecb3",
+              clipboard: "#ffecb3", app: "#ffcdd2", system: "#dcedc8", nav: "#bbdefb", select: "#e0ebf6", browser: "#fbe6fe"},
+  tailorkey: {pinky: "#fbe6fe", ring: "#e5feff", middy: "#d9f9c9", index: "#fffec9",
+              clipboard: "#fffec9", app: "#fbe6fe", system: "#f8e6d7", nav: "#d9f9c9", select: "#e0ebf6", browser: "#fbe6fe"},
+  nordic:    {pinky: "#eceff4", ring: "#d8dee9", middy: "#b3d4e0", index: "#a3c9c6",
+              clipboard: "#f0e2b6", app: "#e8b4b8", system: "#c4d7b2", nav: "#b3d4e0", select: "#a3c9c6", browser: "#d2c4d4"},
+  sunset:    {pinky: "#ffc8a2", ring: "#ffb7b2", middy: "#e2f0cb", index: "#b5ead7",
+              clipboard: "#fff2b2", app: "#ff9aa2", system: "#ffd3b6", nav: "#c7ceea", select: "#b5ead7", browser: "#e2b6cf"}
+};
+
+THEMES[$theme] as $pal |
+if $pal == null then error("Unknown color theme \"\($theme)\".") else . end |
+
+# --- 2. CMD OR CTRL ---
+(if $os == "mac" then "LG" else "LC" end) as $mod |
+
+# --- 3. SHORTCUTS TO LABEL, BY GROUP ---
+# Each key is a binding written as a signature: &kp(LC(C)) is "&kp" with Ctrl+C. __MOD__ stands for Ctrl
+# (Windows/Linux) or Cmd (Mac).
+# Use `os: "mac"` or `os: "win"` to restrict a shortcut. If omitted, it applies to both!
+(
+  [
+    {
+      bg: $pal.clipboard,
+      items: {
+        "&kp(__MOD__(C))": { icon: "fa-copy", label: "Copy" },
+        "&kp(__MOD__(V))": { icon: "fa-paste", label: "Paste" },
+        "&kp(__MOD__(X))": { icon: "fa-cut", label: "Cut" },
+        "&kp(__MOD__(A))": { label: "Select All" },
+        "&kp(__MOD__(Z))": { icon: "fa-undo", label: "Undo" },
+        "&kp(__MOD__(Y))": { icon: "fa-redo", label: "Redo", os: "win" },
+        "&kp(LS(__MOD__(Z)))": { icon: "fa-redo", label: "Redo" },
+        "&kp(__MOD__(LS(Z)))": { icon: "fa-redo", label: "Redo" }
+      }
+    },
+    {
+      bg: $pal.app,
+      items: {
+        "&kp(__MOD__(S))": { icon: "fa-save", label: "Save" },
+        "&kp(__MOD__(N))": { icon: "fa-plus", label: "New" },
+        "&kp(__MOD__(O))": { icon: "fa-folder-open", label: "Open" },
+        "&kp(__MOD__(P))": { icon: "fa-print", label: "Print" },
+        "&kp(__MOD__(W))": { icon: "fa-times", label: "Close" },
+        "&kp(LG(Q))": { icon: "fa-power-off", label: "Quit App", os: "mac" },
+        "&kp(LA(F4))": { icon: "fa-power-off", label: "Quit App", os: "win" },
+        "&kp(LG(H))": { icon: "fa-eye-slash", label: "Hide App", os: "mac" },
+        "&kp(LG(DOWN))": { icon: "fa-eye-slash", label: "Min App", os: "win" },
+        "&kp(LG(E))": { icon: "fa-folder", label: "Explorer", os: "win" }
+      }
+    },
+    {
+      bg: $pal.system,
+      items: {
+        "&kp(__MOD__(F))": { icon: "fa-search", label: "Find" },
+        "&kp(__MOD__(G))": { icon: "fa-search-plus", label: "Next" },
+        "&kp(__MOD__(LS(G)))": { icon: "fa-search-minus", label: "Prev" },
+        
+        "&kp(LG(SPACE))": { icon: "fa-search", label: "Spotlight", os: "mac" },
+        "&kp(LG(S))": { icon: "fa-search", label: "Search", os: "win" },
+        "&kp(LG(D))": { icon: "fa-desktop", label: "Desktop", os: "win" },
+        
+        "&kp(LA(TAB))": { icon: "fa-exchange-alt", label: "Switch App", os: "win" },
+        "&kp(LG(TAB))": { icon: "fa-tasks", label: "Switch / Tasks" },
+        "&kp(LC(UP))": { icon: "fa-th-large", label: "Mission Ctrl", os: "mac" },
+        
+        "&kp(LG(GRAVE))": { icon: "fa-window-restore", label: "Next Win", os: "mac" },
+        "&kp(LA(ESC))": { icon: "fa-window-restore", label: "Next Win", os: "win" },
+        
+        "&kp(LG(L))": { icon: "fa-lock", label: "Lock", os: "win" },
+        "&kp(LC(LG(Q)))": { icon: "fa-lock", label: "Lock", os: "mac" },
+        
+        "&kp(PRINTSCREEN)": { icon: "fa-camera", label: "Screenshot", os: "win" },
+        "&kp(LS(LG(S)))": { icon: "fa-crop", label: "Snip Tool", os: "win" },
+        "&kp(LS(LG(N4)))": { icon: "fa-crop", label: "Screenshot", os: "mac" },
+        
+        "&kp(LG(DOT))": { icon: "fa-smile", label: "Emoji", os: "win" },
+        "&kp(LC(LG(SPACE)))": { icon: "fa-smile", label: "Emoji", os: "mac" },
+
+        "&kp(RET)": { },
+        "&kp(ESC)": { }
+      }
+    },
+    {
+      bg: $pal.nav,
+      items: {
+        "&kp(HOME)": { label:  ""  },
+        "&kp(END)": { label:  ""  },
+        "&kp(UP)": { label:  ""  },
+        "&kp(DOWN)": { label:  "" },
+        "&kp(LEFT)": { label:  ""  },
+        "&kp(RIGHT)": { label:  "" },
+        "&kp(PG_UP)": { description: "Page Up" },
+        "&kp(PG_DN)": { description: "Page Down" },
+
+        "&kp(LG(LEFT))": { icon: "fa-step-backward", label: "Line Start", os: "mac" },
+        "&kp(LG(RIGHT))": { icon: "fa-step-forward", label: "Line End", os: "mac" },
+        
+        "&kp(LC(HOME))": { icon: "fa-fast-backward", label: "Doc Top", os: "win" },
+        "&kp(LG(UP))": { icon: "fa-fast-backward", label: "Doc Top", os: "mac" },
+        "&kp(LC(END))": { icon: "fa-fast-forward", label: "Doc Bottom", os: "win" },
+        "&kp(LG(DOWN))": { icon: "fa-fast-forward", label: "Doc Bottom", os: "mac" },
+        
+        "&kp(LC(LEFT))": { icon: "fa-angle-double-left", label: "Prev Word", os: "win" },
+        "&kp(LA(LEFT))": { icon: "fa-angle-double-left", label: "Prev Word", os: "mac" },
+        "&kp(LC(RIGHT))": { icon: "fa-angle-double-right", label: "Next Word", os: "win" },
+        "&kp(LA(RIGHT))": { icon: "fa-angle-double-right", label: "Next Word", os: "mac" },
+
+        "&kp(LC(BSPC))": {  label: "Del Word", os: "win" },
+        "&kp(LA(BSPC))": {  label: "Del Word", os: "mac" },
+        "&kp(LG(BSPC))": {  label: "Del Line", os: "mac" }
+      }
+    },
+    {
+      bg: $pal.select,
+      items: {
+        "&kp(LS(HOME))": { icon: "fa-outdent", label: "Sel Start", os: "win" },
+        "&kp(LS(LG(LEFT)))": { icon: "fa-outdent", label: "Sel Start", os: "mac" },
+        "&kp(LS(END))": { icon: "fa-indent", label: "Sel End", os: "win" },
+        "&kp(LS(LG(RIGHT)))": { icon: "fa-indent", label: "Sel End", os: "mac" },
+        
+        "&kp(LS(LC(HOME)))": { icon: "fa-level-up-alt", label: "Sel Top", os: "win" },
+        "&kp(LS(LG(UP)))": { icon: "fa-level-up-alt", label: "Sel Top", os: "mac" },
+        "&kp(LS(LC(END)))": { icon: "fa-level-down-alt", label: "Sel Bottom", os: "win" },
+        "&kp(LS(LG(DOWN)))": { icon: "fa-level-down-alt", label: "Sel Bottom", os: "mac" },
+
+        "&kp(LS(LC(LEFT)))": { icon: "fa-angle-left", label: "Sel Prev", os: "win" },
+        "&kp(LS(LA(LEFT)))": { icon: "fa-angle-left", label: "Sel Prev", os: "mac" },
+        "&kp(LS(LC(RIGHT)))": { icon: "fa-angle-right", label: "Sel Next", os: "win" },
+        "&kp(LS(LA(RIGHT)))": { icon: "fa-angle-right", label: "Sel Next", os: "mac" }
+      }
+    },
+    {
+      bg: $pal.browser,
+      items: {
+        "&kp(__MOD__(L))": { icon: "fa-link", label: "Focus URL" },
+        "&kp(__MOD__(T))": { icon: "fa-plus-square", label: "New Tab" },
+        "&kp(LS(__MOD__(T)))": { icon: "fa-history", label: "Reopen Tab" },
+        "&kp(LC(TAB))": { icon: "fa-chevron-right", label: "Next Tab" },
+        "&kp(LS(LC(TAB)))": { icon: "fa-chevron-left", label: "Prev Tab" },
+        "&kp(__MOD__(R))": { icon: "fa-sync", label: "Refresh" },
+        "&kp(LS(__MOD__(R)))": { icon: "fa-sync-alt", label: "Hard Refresh" },
+        "&kp(LC(F5))": { icon: "fa-sync-alt", label: "Hard Refresh", os: "win" }
+      }
+    }
+  ] 
+  | map(.bg as $bg | .items | with_entries(
+      select(.value.os == null or .value.os == "both" or .value.os == $os) |
+      .key |= (split("__MOD__") | join($mod)) | 
+      .value.background = $bg |
+      .value |= del(.os)
+    )) 
+  | add
+) as $logical_map |
+
+# =========================================================
+# ENGINE
+# =========================================================
+
+(.keyboard? | if type == "string" then ascii_downcase else "glove80" end) as $kb |
+
+# --- HOME ROW ---
+# Base-layer key positions of the eight home-row keys: left pinky to left index, then right index to right pinky.
+({glove80: [35, 36, 37, 38, 41, 42, 43, 44], go60: [25, 26, 27, 28, 31, 32, 33, 34]}[$kb] // []) as $homePositions |
+# On a Mac the pinky and middle colors are swapped.
+(if $os == "mac" then {pinky: "middy", middy: "pinky"} else {} end) as $swap |
+def homeStyle($finger; $icon): {background: $pal[$swap[$finger] // $finger], icon: $icon};
+([("pinky", "ring", "middy", "index") | homeStyle(.; "fa-align-left")] + [("index", "middy", "ring", "pinky") | homeStyle(.; "fa-align-right")]) as $homeStyles |
+([range($homePositions | length) as $i | {key: ($homePositions[$i] | tostring), value: $homeStyles[$i]}] | from_entries) as $homeRow |
+
+(.keymap // .) as $km |
+if ($km | type) != "object" or ($km.layers | type) != "array" or ($km.layers | length) == 0
+then error("This file has no layers, so there are no keys to work on.") else . end |
+
+# The troubleshooting log lists this many changed keys one by one; the rest are only counted.
+def LOG_KEYS: 200;
+
+# --- ONE KEY ---
+# The text a binding is looked up by: "&kp(LC(C))", "&mt(LSHFT,A)", or just the text of a plain string.
+def signature:
+  if type == "object" and .value != null then
+    (.params // []) as $p
+    | (.value | tostring) + (if ($p | length) > 0 then "(" + ($p | map(signature) | join(",")) + ")" else "" end)
+  else tostring end;
+
+# A style with an icon but no label of its own takes the label from the key itself (its second parameter, or the first).
+def labelFor($style):
+  if $style.icon != null and ($style.label == null or $style.label == "") and type == "object" then
+    (.params // []) as $p
+    | if ($p | length) > 1 then ($p[1] | if type == "object" then (.value // .) else . end | tostring)
+      elif ($p | length) > 0 then ($p[0] | if type == "object" then (.value // .) else . end | tostring)
+      else $style.label end
+  else $style.label end;
+
+# The decoration to write for a style. "colors" never writes label/description (so it keeps labels you typed or
+# an earlier labels run set); "labels" never writes background/color/icon; "colors_labels" writes it all.
+def payload($style):
+  ({background: $style.background, color: $style.color, icon: $style.icon, description: $style.description, label: labelFor($style)}
+   | with_entries(select(.value != null)))
+  | if $mode == "colors" then del(.label, .description)
+    elif $mode == "labels" then del(.background, .color, .icon)
+    else . end;
+
+# Shortcuts win over the home-row color, which only exists on the base layer ($layerIdx == 0).
+# Gives the key back with whether it changed: {key, changed}. Only styled keys are compared.
+def decorate($layerIdx; $keyIdx):
+  # Every shortcut in the table is a &kp, so other keys skip the lookup.
+  ((if type == "object" and .value == "&kp" then $logical_map[signature] else null end)
+   // (if $layerIdx == 0 then $homeRow[$keyIdx | tostring] else null end)) as $style
+  | if $style == null then {key: ., changed: false}
+    else . as $old
+      | payload($style) as $new
+      | (if type == "object" then .decoration = ((.decoration // {}) + $new)
+         else {value: ., params: [], decoration: $new} end) as $key
+      | {key: $key, changed: ($key != $old)}
+    end;
+
+$km.layers as $before
+| (if $mode == "remove" then
+    # Removing takes the whole decoration off every key that has one.
+    [$before[] | map(if type == "object" then del(.decoration) else . end)] as $after
+    | {after: $after, changed: [range($before | length) as $l | range($before[$l] | length) as $k | select($before[$l][$k] | type == "object" and has("decoration")) | [$l, $k]]}
+  else
+    [range($before | length) as $l | $before[$l] | . as $layer | [range(length) as $k | $layer[$k] | decorate($l; $k)]] as $results
+    | {after: [$results[] | map(.key)], changed: [range($results | length) as $l | range($results[$l] | length) as $k | select($results[$l][$k].changed) | [$l, $k]]}
+  end) as $done
+| $done.after as $after
+| $done.changed as $changed
+| (reduce $changed[] as $c ([]; .[$c[0]] += 1)) as $perLayer
+| ($km.layer_names // []) as $names
+| def layerName($l): $names[$l] // "Layer \($l + 1)";
+  def describe($d): if $d == null then "no decoration" else ([$d | to_entries[] | "\(.key) \(.value)"] | join(", ")) end;
+
+if ($changed | length) == 0
+then . + {_flowReport: {changed: false, message: (if $mode == "remove" then "None of your keys had a color or label, so nothing was changed." else "Every matching key already looks like this, or no key matches, so nothing was changed." end), lines: [], log: ["0 of \($before | map(length) | add) keys changed"]}}
+else
+  (.keymap // .) |= (.layers = $after)
+  | . + {_flowReport: {
+      changed: true,
+      message: (if $mode == "remove" then "Removed the colors and labels from \($changed | length) keys." else "Colored or labeled \($changed | length) keys." end),
+      lines: [range($perLayer | length) as $l | select($perLayer[$l] != null) | {ok: true, text: "\(layerName($l)): \($perLayer[$l]) keys"}],
+      log: (["mode \($mode), \($os), theme \($theme), \($kb) layout", "\($changed | length) of \($before | map(length) | add) keys changed on \($changed | map(.[0]) | unique | length) of \($before | length) layers"]
+            + [$changed[:LOG_KEYS][] | "\(layerName(.[0])) key \(.[1] + 1): \(describe($before[.[0]][.[1]].decoration?)) -> \(describe($after[.[0]][.[1]].decoration?))"]
+            + (if ($changed | length) > LOG_KEYS then ["... and \($changed | length - LOG_KEYS) more keys"] else [] end))
+    }}
+end'''
+
+category = "Looks & lighting"
+
+successMessage = "Your keys now have the colors and labels you chose: home-row keys on the base layer, and common shortcuts (copy, paste, navigation, browser …) on every layer, worded for macOS or Windows/Linux as you picked. To take them off again, run this with \"What to change\" set to Remove Decorators."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "🌈"
+keywords = ["labels", "colors", "theme", "decorate"]
+
+[[param]]
+id = "mode"
+label = "What to change"
+type = "select"
+options = ["colors_labels", "colors", "labels", "remove"]
+labels = ["🎨 Colors + Labels (overwrite)", "🖌️ Colors only (overwrite)", "🏷️ Labels only (overwrite)", "🗑️ Remove Decorators (colors & labels)"]
+default = "colors_labels"
+
+[[param]]
+id = "os"
+label = "Operating System"
+type = "select"
+options = ["win", "mac"]
+labels = ["Windows / Linux", "macOS (Swaps Pinky & Middle)"]
+default = "win"
+
+[[param]]
+id = "theme"
+label = "Color Theme"
+type = "select"
+options = ["engrammer", "tailorkey", "nordic", "sunset"]
+labels = ["Glorious Engrammer", "TailorKey", "Nordic Frost", "Sunset Horizon"]
+default = "tailorkey"

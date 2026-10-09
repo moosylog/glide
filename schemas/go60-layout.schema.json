@@ -1,0 +1,749 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MoErgo Go60 Layout",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "combos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "binding": {
+            "$ref": "#/definitions/layoutBinding"
+          },
+          "keyPositions": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 59
+            },
+            "minItems": 0,
+            "maxItems": 60
+          },
+          "layers": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": -1
+            },
+            "minItems": 1,
+            "if": {
+              "contains": {
+                "const": -1
+              }
+            },
+            "then": {
+              "maxItems": 1
+            }
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-zA-Z]\\w+$"
+          },
+          "requirePriorIdleMs": {
+            "type": "number",
+            "minimum": 1
+          },
+          "slowRelease": {
+            "type": "boolean"
+          },
+          "timeoutMs": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "description",
+          "binding",
+          "keyPositions"
+        ]
+      },
+      "default": []
+    },
+    "config_parameters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "paramName": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "paramName",
+          "value"
+        ]
+      },
+      "default": []
+    },
+    "creator": {
+      "type": "string",
+      "default": "",
+      "minLength": 0,
+      "maxLength": 128
+    },
+    "custom_defined_behaviors": {
+      "type": "string",
+      "default": ""
+    },
+    "custom_devicetree": {
+      "type": "string",
+      "default": ""
+    },
+    "date": {
+      "anyOf": [
+        {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "firmware_api_version": {
+      "type": "string",
+      "default": "1",
+      "minLength": 1
+    },
+    "holdTaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "bindings": {
+            "type": "array",
+            "items": [
+              {
+                "anyOf": [
+                  {
+                    "const": ""
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 65,
+                    "pattern": "^&[a-zA-Z]\\w*$"
+                  }
+                ]
+              },
+              {
+                "anyOf": [
+                  {
+                    "const": ""
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 65,
+                    "pattern": "^&[a-zA-Z]\\w*$"
+                  }
+                ]
+              }
+            ],
+            "additionalItems": false,
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "descriptorId": {
+            "not": {}
+          },
+          "flavor": {
+            "type": "string",
+            "enum": [
+              "hold-preferred",
+              "balanced",
+              "tap-preferred",
+              "tap-unless-interrupted"
+            ]
+          },
+          "holdTriggerKeyPositions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 59
+            }
+          },
+          "holdTriggerOnRelease": {
+            "type": "boolean"
+          },
+          "holdWhileUndecided": {
+            "type": "boolean"
+          },
+          "holdWhileUndecidedLinger": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 65,
+            "pattern": "^&[a-zA-Z]\\w*$"
+          },
+          "quickTapMs": {
+            "type": "integer",
+            "minimum": -1,
+            "maximum": 5000
+          },
+          "requirePriorIdleMs": {
+            "type": "integer",
+            "minimum": -1,
+            "maximum": 5000
+          },
+          "retroTap": {
+            "type": "boolean"
+          },
+          "tappingTermMs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "tappingTermMs",
+          "bindings"
+        ]
+      },
+      "default": []
+    },
+    "inputListeners": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "inputProcessors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 45,
+                  "pattern": "^&[a-zA-Z]\\w*$"
+                },
+                "params": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "$ref": "#/definitions/layoutBinding"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "default": []
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "code"
+              ]
+            },
+            "default": []
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                "code": {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 45,
+                  "pattern": "^[a-zA-Z]\\w*$"
+                },
+                "inputProcessors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 45,
+                        "pattern": "^&[a-zA-Z]\\w*$"
+                      },
+                      "params": {
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "$ref": "#/definitions/layoutBinding"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "minItems": 1
+                            }
+                          ]
+                        },
+                        "default": []
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "code"
+                    ]
+                  },
+                  "minItems": 1
+                },
+                "layers": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "minItems": 1
+                },
+                "processNext": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "code",
+                "layers",
+                "inputProcessors"
+              ]
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "code"
+        ]
+      },
+      "default": []
+    },
+    "keyboard": {
+      "type": "string",
+      "const": "go60",
+      "default": "go60"
+    },
+    "layer_names": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 25,
+        "pattern": "^\\w+$"
+      },
+      "maxItems": 32
+    },
+    "layers": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/__schema0"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "decoration": {
+                  "type": "object",
+                  "properties": {
+                    "description": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 250
+                    },
+                    "_uids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "background": {
+                      "type": "string",
+                      "maxLength": 50
+                    },
+                    "color": {
+                      "type": "string",
+                      "maxLength": 50
+                    },
+                    "icon": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 75
+                    },
+                    "label": {
+                      "type": "string",
+                      "maxLength": 30
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "minItems": 60,
+        "maxItems": 60
+      },
+      "maxItems": 32
+    },
+    "layout_parameters": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "propertyNames": {
+        "type": "string"
+      }
+    },
+    "locale": {
+      "type": "string",
+      "default": "en-US"
+    },
+    "macros": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "bindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/layoutBinding"
+            },
+            "minItems": 1,
+            "maxItems": 256
+          },
+          "descriptorId": {
+            "not": {}
+          },
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 65,
+            "pattern": "^&[a-zA-Z]\\w*$"
+          },
+          "params": {
+            "type": "array",
+            "items": {}
+          },
+          "tapMs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "waitMs": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "bindings"
+        ]
+      },
+      "default": []
+    },
+    "modMorphs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "cases": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "binding": {
+                  "$ref": "#/definitions/layoutBinding"
+                },
+                "keepMods": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "mods": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "binding"
+              ]
+            },
+            "minItems": 2
+          },
+          "descriptorId": {
+            "not": {}
+          },
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 65,
+            "pattern": "^&[a-zA-Z]\\w*$"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "cases"
+        ]
+      },
+      "default": []
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 400000
+    },
+    "parent_uuid": {
+      "type": "string",
+      "default": ""
+    },
+    "stickyKeys": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "bindings": {
+            "type": "array",
+            "items": [
+              {
+                "anyOf": [
+                  {
+                    "const": ""
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 65,
+                    "pattern": "^&[a-zA-Z]\\w*$"
+                  }
+                ]
+              }
+            ],
+            "additionalItems": false,
+            "minItems": 1,
+            "maxItems": 1
+          },
+          "descriptorId": {
+            "not": {}
+          },
+          "ignoreModifiers": {
+            "type": "boolean"
+          },
+          "lazy": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 65,
+            "pattern": "^&[a-zA-Z]\\w*$"
+          },
+          "quickRelease": {
+            "type": "boolean"
+          },
+          "releaseAfterMs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60000
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "bindings"
+        ]
+      },
+      "default": []
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 25,
+        "pattern": "^[a-z][a-z\\-0-9]+$"
+      }
+    },
+    "tapDances": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "bindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/layoutBinding"
+            },
+            "minItems": 2,
+            "maxItems": 5
+          },
+          "descriptorId": {
+            "not": {}
+          },
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 65,
+            "pattern": "^&[a-zA-Z]\\w*$"
+          },
+          "tappingTermMs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "tappingTermMs",
+          "bindings"
+        ]
+      },
+      "default": []
+    },
+    "unlisted": {
+      "type": "boolean",
+      "default": false
+    },
+    "uuid": {
+      "type": "string",
+      "default": ""
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2
+    }
+  },
+  "required": [
+    "layer_names",
+    "layers"
+  ],
+  "definitions": {
+    "__schema0": {
+      "type": "object",
+      "properties": {
+        "params": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/__schema0"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        }
+      }
+    },
+    "layoutBinding": {
+      "type": "object",
+      "properties": {
+        "decoration": {},
+        "params": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/layoutBinding"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,16 @@
+GLIDE
+Copyright (c) 2026 Moosy (github.com/moosylog). All rights reserved.
+
+You may use GLIDE in your web browser, free of charge, for your own keyboard layouts.
+
+Without written permission from the owner you may not copy, host, redistribute, sell, sublicense, modify,
+decompile, reverse engineer or build derivative works from GLIDE or any part of it, except where the law
+says you may regardless of this notice.
+
+The layouts you create are yours.
+
+GLIDE is provided "as is", without warranty of any kind. The owner is not liable for any damage or loss of
+data that results from using it. Keep a copy of your layout files.
+
+Data files shipped with GLIDE (for example under locales/ and schemas/) belong to their respective owners.
+Third-party software is listed in THIRD-PARTY-NOTICES.txt and stays under its own licence.

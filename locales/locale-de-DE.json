@@ -1,0 +1,201 @@
+[
+  {
+    "baseName": "GRAVE",
+    "localeNames": ["DE_CARET", "DE_CIRCON"],
+    "isOverrideNames": true,
+    "description": "de-DE: ^ [Circonflex] and ° [Degree]",
+    "shortcut": "^"
+  },
+  {
+    "baseName": "MINUS",
+    "localeNames": ["DE_SCHARFES", "DE_ESZETT", "DE_SZ"],
+    "isOverrideNames": true,
+    "description": "de-DE: ß [Scharfes S] and ? [Question Mark] and \\ [Backslash]",
+    "shortcut": "ß"
+  },
+  {
+    "baseName": "EQUAL",
+    "localeNames": ["DE_AIGU", "DE_ACUTE"],
+    "isOverrideNames": true,
+    "description": "de-DE: ´ [Aigu] and ` [Grave]",
+    "shortcut": "´"
+  },
+  {
+    "baseName": "Q",
+    "localeNames": ["DE_Q"],
+    "isOverrideNames": true,
+    "description": "de-DE: q and Q and @ [At]",
+    "shortcut": "Q"
+  },
+  {
+    "baseName": "E",
+    "localeNames": ["DE_E"],
+    "isOverrideNames": true,
+    "description": "de-DE: e and E and € [Euro]",
+    "shortcut": "E"
+  },
+  {
+    "baseName": "Z",
+    "localeNames": ["DE_Y"],
+    "isOverrideNames": true,
+    "description": "de-DE: y and Y",
+    "shortcut": "Y"
+  },
+  {
+    "baseName": "LEFT_BRACKET",
+    "localeNames": ["DE_UE"],
+    "isOverrideNames": true,
+    "description": "de-DE: ü and Ü",
+    "shortcut": "ü",
+    "symbol": "Ü"
+  },
+  {
+    "baseName": "RIGHT_BRACKET",
+    "localeNames": ["DE_PLUS"],
+    "isOverrideNames": true,
+    "description": "de-DE: + [Plus] and * [Star] and ~ [Tilde]",
+    "shortcut": "+"
+  },
+  {
+    "baseName": "M",
+    "localeNames": ["DE_M"],
+    "isOverrideNames": true,
+    "description": "de-DE: m and M and µ",
+    "shortcut": "M"
+  },
+  {
+    "baseName": "SEMICOLON",
+    "localeNames": ["DE_OE"],
+    "isOverrideNames": true,
+    "description": "de-DE: ö and Ö",
+    "shortcut": "ö",
+    "symbol": "Ö"
+  },
+  {
+    "baseName": "SINGLE_QUOTE",
+    "localeNames": ["DE_AE"],
+    "isOverrideNames": true,
+    "description": "de-DE: ä and Ä",
+    "shortcut": "ä",
+    "symbol": "Ä"
+  },
+  {
+    "baseName": "BACKSLASH",
+    "localeNames": ["DE_HASH", "DE_POUND"],
+    "isOverrideNames": true,
+    "description": "de-DE: # [Hash] and ' [Apostrophe]",
+    "shortcut": "#"
+  },
+  {
+    "baseName": "Y",
+    "localeNames": ["DE_Z"],
+    "isOverrideNames": true,
+    "description": "de-DE: z and Z",
+    "shortcut": "Z"
+  },
+  {
+    "baseName": "NON_US_BACKSLASH",
+    "localeNames": ["DE_LESS_THAN","DE_LT"],
+    "isOverrideNames": true,
+    "description": "de-DE: < [Less Than] and > [Greater Than] and | [Pipe]",
+    "shortcut": "<"
+  },
+  {
+    "baseName": "COMMA",
+    "localeNames": ["DE_COMMA"],
+    "isOverrideNames": true,
+    "description": "de-DE: , [Comma] and ; [Semicolon]",
+    "shortcut": ","
+  },
+  {
+    "baseName": "PERIOD",
+    "localeNames": ["DE_PERIOD","DE_DOT"],
+    "isOverrideNames": true,
+    "description": "de-DE: . [Period] and : [Colon]",
+    "shortcut": "."
+  },
+  {
+    "baseName": "SLASH",
+    "localeNames": ["DE_MINUS"],
+    "isOverrideNames": true,
+    "description": "de-DE: - [Minus] and _ [Underscore]",
+    "shortcut": "-"
+  },
+  {
+    "baseName": "RALT",
+    "localeNames": ["DE_ALT_GR", "DE_ALT_GRAPH"],
+    "isOverrideNames": false,
+    "description": "de-DE: AltGr [AltGraph]",
+    "symbol" : "AltGr"
+  },
+  {
+    "baseName": "N1",
+    "localeNames": ["DE_NUMBER_1", "DE_N1"],
+    "isOverrideNames": true,
+    "description": "de-DE: 1 and ! [Exclamation]",
+    "shortcut": "1"
+  },
+  {
+    "baseName": "N2",
+    "localeNames": ["DE_NUMBER_2", "DE_N2"],
+    "isOverrideNames": true,
+    "description": "de-DE: 2 and \" [Quote (Double)] and ² [2 (Superscript)]",
+    "shortcut": "2"
+  },
+  {
+    "baseName": "N3",
+    "localeNames": ["DE_NUMBER_3", "DE_N3"],
+    "isOverrideNames": true,
+    "description": "de-DE: 3 and § [Paragraph] and ³ [3 (Superscript)]",
+    "shortcut": "3"
+  },
+  {
+    "baseName": "N4",
+    "localeNames": ["DE_NUMBER_4", "DE_N4"],
+    "isOverrideNames": true,
+    "description": "de-DE: 4 and $ [Dollar]",
+    "shortcut": "4"
+  },
+  {
+    "baseName": "N5",
+    "localeNames": ["DE_NUMBER_5", "DE_N5"],
+    "isOverrideNames": true,
+    "description": "de-DE: 5 and % [Percent]",
+    "shortcut": "5"
+  },
+  {
+    "baseName": "N6",
+    "localeNames": ["DE_NUMBER_6", "DE_N6"],
+    "isOverrideNames": true,
+    "description": "de-DE: 6 and & [Ampersand]",
+    "shortcut": "6"
+  },
+  {
+    "baseName": "N7",
+    "localeNames": ["DE_NUMBER_7", "DE_N7"],
+    "isOverrideNames": true,
+    "description": "de-DE: 7 and / [Forward Slash] and { [Left Brace]",
+    "shortcut": "7"
+  },
+  {
+    "baseName": "N8",
+    "localeNames": ["DE_NUMBER_8", "DE_N8"],
+    "isOverrideNames": true,
+    "description": "de-DE: 8 and ( [Left Parenthesis] and [ [Left Bracket]",
+    "shortcut": "8"
+  },
+  {
+    "baseName": "N9",
+    "localeNames": ["DE_NUMBER_9", "DE_N9"],
+    "isOverrideNames": true,
+    "description": "de-DE: 9 and ) [Right Parenthesis] and ] [Right Bracket]",
+    "shortcut": "9"
+  },
+  {
+    "baseName": "N0",
+    "localeNames": ["DE_NUMBER_0", "DE_N0"],
+    "isOverrideNames": true,
+    "description": "de-DE: 0 and = [Equal] and } [Right Brace]",
+    "shortcut": "0"
+  }
+]

@@ -1,0 +1,81 @@
+uid = "colors_magic"
+
+title = "Style your Magic keys"
+
+subtitle = "One look for every Magic key"
+
+description = '''
+Gives every `&magic` key across all your layers the same look — the classic icon, in colors you choose.
+
+- Set the background and icon color with the parameters below.
+- **To remove the styling:** leave the Background field blank and hit Apply.'''
+
+script = '''
+# ==============================================================================
+# MAGIC KEY STYLE
+# ==============================================================================
+# Gives every &magic key on every layer the same look, or, with a blank Background,
+# takes the look away again. Nothing else changes.
+#
+# It stops, and changes nothing, when a color is not a hex color (#rrggbb or
+# #rrggbbaa).
+# ==============================================================================
+
+def is_color: type == "string" and test("^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$");
+def is_magic: type == "object" and .value == "&magic";
+
+# The layout as it is now, to tell afterwards what changed.
+(if type == "object" and .keymap? then .keymap else . end) as $before |
+(($background // "") == "") as $clearing |
+
+# --- CHECKS ---
+(if $clearing then .
+ elif ($background | is_color) | not then error("\"\($background)\" is not a color. Use a hex color such as #d4dde1 or #d4dde1ff.")
+ elif ($color | is_color) | not then error("\"\($color)\" is not a color. Use a hex color such as #000000 or #000000ff.")
+ else . end) |
+
+(.keymap // .) |= (
+  .layers |= ((. // []) | map(map(
+    if is_magic then
+      if $clearing then del(.decoration)
+      else .decoration = {"icon": "moergo-long", "background": $background, "color": $color}
+      end
+    else . end)))
+)
+
+# --- REPORT ---
+| (if type == "object" and .keymap? then .keymap else . end) as $after
+| ([($after.layers // [])[][] | select(is_magic)] | length) as $magic
+| if $magic == 0 then
+    . + {_flowReport: {changed: false, message: "Nothing was changed: there is no Magic key on any layer to style.", lines: [], log: ["no &magic keys found"]}}
+  elif $before == $after then
+    . + {_flowReport: {changed: false, message: (if $clearing then "Nothing was changed: your Magic keys have no styling to remove." else "Nothing was changed: your Magic keys already look like this." end), lines: [], log: ["identical"]}}
+  else
+    . + {_flowReport: {
+        changed: true,
+        lines: [{ok: true, text: (if $clearing then "Removed the styling from \($magic) Magic keys" else "Styled \($magic) Magic keys" end)}],
+        log: ["magic keys: \($magic)"]
+      }}
+  end'''
+
+category = "Looks & lighting"
+
+successMessage = "Every Magic key now has your colors. Run this again with Background left blank to remove them."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "✨"
+keywords = ["colour", "icon"]
+
+[[param]]
+id = "background"
+label = "Background Color (Leave blank to remove styling)"
+type = "text"
+default = "#d4dde1ff"
+
+[[param]]
+id = "color"
+label = "Icon Color"
+type = "text"
+default = "#000000ff"

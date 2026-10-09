@@ -1,0 +1,54 @@
+uid = "mouse_swap_trackpads"
+
+title = "Swap the trackpads"
+
+subtitle = "Pointer and scroll wheel trade places"
+
+description = '''
+Swaps which trackpad does what — the one that was your mouse pointer becomes the scroll wheel, and vice versa. Run again to swap back.'''
+
+script = '''
+# ==============================================================================
+# SWAP THE TRACKPADS
+# ==============================================================================
+# Every setting block of the left trackpad listener moves to the right one, and the
+# other way round. Other listeners (trackballs, say) are left alone. Running it again
+# swaps back.
+# ==============================================================================
+
+def is_trackpad: .code == "&cirque_lh_listener" or .code == "&cirque_rh_listener";
+
+# The layout as it is now, to tell afterwards what changed.
+(if type == "object" and .keymap? then .keymap else . end) as $before |
+
+(.keymap // .) |= (
+  if (.inputListeners | type) == "array" then
+    .inputListeners |= map(
+      if .code == "&cirque_lh_listener" then .code = "&cirque_rh_listener"
+      elif .code == "&cirque_rh_listener" then .code = "&cirque_lh_listener"
+      else . end)
+  else . end
+)
+
+# --- REPORT ---
+| (if type == "object" and .keymap? then .keymap else . end) as $after
+| ([($before.inputListeners // [])[] | select(type == "object" and is_trackpad)] | length) as $pads
+| if $pads == 0 then
+    . + {_flowReport: {changed: false, message: "Nothing was changed: this layout has no trackpad settings to swap.", lines: [], log: ["no trackpad listeners found"]}}
+  else
+    . + {_flowReport: {
+        changed: true,
+        lines: [{ok: true, text: "Swapped the settings of the left and right trackpad (\($pads) setting blocks)"}],
+        log: ["trackpad listeners: \($pads)"]
+      }}
+  end'''
+
+category = "Mouse"
+
+successMessage = "Your two trackpads have swapped roles — whichever hand was the mouse pointer is now the scroll wheel, and vice versa. Run again to swap back."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["glove80", "go60"]
+icon = "⚫"
+keywords = ["scroll wheel", "cirque", "touchpad"]

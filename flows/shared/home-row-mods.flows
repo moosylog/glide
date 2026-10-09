@@ -1,0 +1,280 @@
+uid = "hrm_add"
+
+title = "Home-row mods"
+
+subtitle = "Shift, Ctrl, Alt and Cmd under your fingers"
+
+description = '''
+Put Shift, Ctrl, Alt and Cmd under your fingers: tap a home-row key for its letter, hold it for a modifier — so your pinkies don't have to stretch. [Watch a quick explainer](https://youtu.be/gFW0tgQwnHQ).
+
+Not sure which style to pick? **Urob Timeless** feels the most forgiving; **Sunaku** reacts faster but takes more practice.
+
+⚠️ If you already have home-row mods, remove them first with **Remove home-row mods** to avoid duplicates.'''
+
+script = '''
+# Modifier sequences & Colors
+{
+  "GACS": [
+    "LGUI", "LALT", "LCTRL", "LSHFT",
+    "RSHFT", "RCTRL", "LALT", "RGUI"
+  ],
+  "CAGS": [
+    "LCTRL", "LALT", "LGUI", "LSHFT",
+    "RSHFT", "RGUI", "LALT", "RCTRL"
+  ]
+} as $mod_registry |
+
+{
+  "LSHFT": "#fffec9", "RSHFT": "#fffec9",
+  "LCTRL": "#d9f9c9", "RCTRL": "#d9f9c9",
+  "LALT": "#e5feff",  "RALT": "#e5feff",
+  "LGUI": "#fbe6fe",  "RGUI": "#fbe6fe"
+} as $color_registry |
+
+# ==============================================================================
+# 1. CORE UTILITIES
+# ==============================================================================
+
+# Puts the new items in the list; an item with the same name is replaced, the others stay in place.
+def put_all($new):
+  (. // []) as $have
+  | ($have | map(select(.name as $n | ($new | map(.name) | index($n)) == null))) + $new;
+
+# Only a plain key (or one that already has a home-row mod from this Flow) is turned into a home-row mod.
+# A key that does something else, a layer key or a macro say, is left alone.
+def is_hrm_candidate:
+  type == "object" and .value == "&kp"
+  or (type == "object" and (.value | type == "string") and (.value | startswith("&HRM_") or endswith("_hand")));
+
+def get_side($idx):
+  if $idx < 4 then "left" else "right" end;
+
+# Robust node extraction (string/object/null safe)
+def get_char_node:
+  if type == "object" then
+    (.params[1] // .params[0] // { value: "NONE", params: [] })
+  elif type == "string" then
+    { value: ., params: [] }
+  else
+    { value: "NONE", params: [] }
+  end;
+
+# ==============================================================================
+# 2. DATA REGISTRY
+# ==============================================================================
+
+def GetRegistry($v):
+  {
+    "1": {
+      flavor: "balanced",
+      idle: 150,
+      naming: "simple",
+      profiles: [
+        { id: "hand", term: 280, quick: 175 }
+      ],
+      map: [
+        "hand","hand","hand","hand",
+        "hand","hand","hand","hand"
+      ]
+    },
+
+    "2": {
+      flavor: "balanced",
+      idle: 150,
+      naming: "HRM",
+      profiles: [
+        { id: "finger", term: 250, quick: 105 },
+        { id: "index",  term: 200, quick: 150 }
+      ],
+      map: [
+        "finger","finger","finger","index",
+        "index","finger","finger","finger"
+      ]
+    },
+
+    "3": {
+      flavor: "tap-preferred",
+      idle: 150,
+      naming: "HRM",
+      profiles: [
+        { id: "pinky", term: 270, quick: 300 },
+        { id: "ring",  term: 240, quick: 300 },
+        { id: "middy", term: 210, quick: 300 },
+        { id: "index", term: 180, quick: 300, idle: 100 }
+      ],
+      map: [
+        "pinky","ring","middy","index",
+        "index","middy","ring","pinky"
+      ]
+    }
+  }[$v | tostring]
+  // error("This style of home-row mods does not exist (\($v)). Pick one from the list.");
+
+# ==============================================================================
+# 3. HARDWARE ABSTRACTION LAYER (HAL)
+# ==============================================================================
+
+def GetHardware:
+  (.keyboard | if type == "string" then ascii_downcase else "" end) as $kb |
+  if $kb == "glove80" then
+    { 
+      type: "glove80", 
+      home: [35,36,37,38,41,42,43,44], 
+      l_trigs: [5, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 28, 29, 30, 31, 32, 33, 40, 41, 42, 43, 44, 45, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79],
+      r_trigs: [0, 1, 2, 3, 4, 10, 11, 12, 13, 14, 15, 22, 23, 24, 25, 26, 27, 34, 35, 36, 37, 38, 39, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74]
+    }
+  elif $kb == "go60" then
+    { 
+      type: "go60", 
+      home: [25,26,27,28,31,32,33,34], 
+      l_trigs: [6, 7, 8, 9, 10, 11, 18, 19, 20, 21, 22, 23, 30, 31, 32, 33, 34, 35, 42, 43, 44, 45, 46, 47, 51, 52, 53, 54, 55, 56, 57, 58, 59],
+      r_trigs: [0, 1, 2, 3, 4, 5, 12, 13, 14, 15, 16, 17, 24, 25, 26, 27, 28, 29, 36, 37, 38, 39, 40, 41, 48, 49, 50, 54, 55, 56, 57, 58, 59]
+    }
+  else
+    error("This layout does not say whether it is for a Glove80 or a Go60, so the home-row keys are unknown.")
+  end;
+
+# ==============================================================================
+# 4. MAIN TRANSFORMATION ENGINE
+# ==============================================================================
+
+(GetRegistry($target_version)) as $cfg |
+(GetHardware) as $hw |
+($mod_registry[$mod_preset] // $mod_registry["GACS"]) as $mod_seq |
+
+# ----------------------------------------------------------------------
+# STAGE 1: Positional Indexing
+# ----------------------------------------------------------------------
+
+# The layout as it is now, to tell afterwards what changed.
+(if type == "object" and .keymap? then .keymap else . end) as $before |
+
+(if ($before.layers | type) != "array" or ($before.layers | length) == 0
+ then error("This file has no layers, so there is nothing to put the home-row mods on.")
+ else . end) |
+
+(.layout.keys | reduce .[] as $k (
+  { home_map: {} };
+  ($hw.home | index($k.i)) as $idx |
+  (if $idx != null then .home_map[$k.i | tostring] = $idx else . end)
+)) as $db |
+
+# ----------------------------------------------------------------------
+# STAGE 2: Apply Transformation
+# ----------------------------------------------------------------------
+
+(.keymap // .) |= (
+
+  .holdTaps = ((.holdTaps // []) | put_all([
+      (("left","right") as $side |
+        $cfg.profiles[] | {
+          name:
+            (if $cfg.naming == "simple"
+             then "&\($side)_hand"
+             else "&HRM_\($side)_\(.id)" end),
+
+          description: "Auto-gen \($side) HRM (v\($target_version))",
+          bindings: ["&kp","&kp"],
+          tappingTermMs: .term,
+          quickTapMs: .quick,
+          requirePriorIdleMs: (.idle // $cfg.idle),
+          flavor: $cfg.flavor,
+          holdTriggerOnRelease: true,
+
+          holdTriggerKeyPositions:
+            (if $side == "left"
+             then $hw.l_trigs
+             else $hw.r_trigs
+             end)
+        }
+      )
+    ])) |
+
+  .layers[0] |= [
+    range(length) as $i | .[$i] |
+    ($db.home_map[$i | tostring]) as $h_idx |
+
+    if $h_idx != null and is_hrm_candidate then
+      get_side($h_idx) as $side |
+      get_char_node as $char |
+      ($mod_seq[$h_idx]) as $current_mod |
+      
+      # Pull the color background lookup safely outside the if/else block!
+      ($color_registry[$current_mod]) as $bg |
+
+      (
+        if $set_decorators and $bg != null then
+          { decoration: { background: $bg } }
+        elif type == "object" and .decoration then
+          { decoration: .decoration }
+        else
+          {}
+        end
+      ) as $dec |
+
+      {
+        value:
+          (if $cfg.naming == "simple"
+           then "&\($side)_hand"
+           else "&HRM_\($side)_\($cfg.map[$h_idx])"
+           end),
+
+        params: [
+          { value: $current_mod, params: [] },
+          $char
+        ]
+      } + $dec
+
+    else . end
+  ]
+)
+
+# --- REPORT ---
+| (if type == "object" and .keymap? then .keymap else . end) as $after
+| ($hw.home | map($before.layers[0][.]) | map(select(. != null))) as $homeBefore
+| ($homeBefore | map(select(is_hrm_candidate)) | length) as $converted
+| ($homeBefore | length - $converted) as $skipped
+| ((($after.holdTaps // []) | length) - (($before.holdTaps // []) | length)) as $added
+| if $before == $after then
+    . + {_flowReport: {changed: false, message: "Nothing was changed: your first layer already has these home-row mods.", lines: [], log: ["identical"]}}
+  else
+    . + {_flowReport: {
+        changed: true,
+        lines: ([{ok: true, text: "Put home-row mods on \($converted) of the 8 home-row keys of your first layer"},
+                 {ok: true, text: (if $added > 0 then "Added \($added) hold-tap behaviors that time them" else "Your layout already had the hold-tap behaviors, so they were updated in place" end)}]
+                + (if $skipped > 0 then [{ok: false, text: "\($skipped) home-row keys were left as they are, because they do something other than type a key. Change them to a plain letter first if you want a home-row mod there."}] else [] end)),
+        log: ["home-row keys: \($converted) changed, \($skipped) skipped, hold-taps added: \($added)"]
+      }}
+  end'''
+
+category = "Modifier keys"
+
+successMessage = "Home-row mods are on your base layer: tap a key for its letter, hold it for the modifier. Give the timing a few days to feel natural — you can fine-tune each key under its Settings."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "🏚️"
+keywords = ["home row", "homerow", "hrm", "modifiers", "ctrl", "alt", "pinky"]
+
+[[param]]
+id = "target_version"
+label = "Style"
+type = "select"
+options = ["2", "3"]
+labels = ["Urob timeless", "Sunaku per finger"]
+default = "2"
+
+[[param]]
+id = "mod_preset"
+label = "Modifier order"
+type = "select"
+options = ["GACS", "CAGS"]
+labels = ["Windows / Linux", "macOS"]
+default = "GACS"
+
+[[param]]
+id = "set_decorators"
+label = "Color the home-row keys by modifier"
+type = "boolean"
+default = true

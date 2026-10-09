@@ -1,0 +1,114 @@
+uid = "symbols2_se_mac"
+
+title = "Symbol layer: Swedish (Mac)"
+
+subtitle = "macOS (sv-SE)"
+
+description = '''
+Makes your **Symbol** layer type the right characters when your computer's keyboard language is Swedish (sv-SE) on macOS.
+
+⚠️ Add the **Symbol layer** automation first — this one needs it. (These mappings are generated automatically, not hand-verified — flag it if something looks wrong.)'''
+
+script = '''
+# ==============================================================================
+#             SWEDISH SYMBOL MAPPER (For MoErgo Layout Editor / ZMK)
+#             OS TARGET: macOS (Standard ISO / sv-SE)
+# ==============================================================================
+# 
+# WELCOME! This script translates your "Symbol" layer keys for a Swedish macOS target.
+# Maps aliases (e.g., SQT/SINGLE_QUOTE) to prevent any normalization bugs.
+# ==============================================================================
+
+{
+  "GRAVE":               [{"value": "LS", "params": [{"value": "EQUAL", "params": []}]}],         # ` -> Shift + ´
+  "COMMA":               [{"value": "COMMA", "params": []}],                                      # , -> ,
+  "LS(N9)":              [{"value": "LS", "params": [{"value": "N8", "params": []}]}],            # ( -> Shift + 8
+  "LS(N0)":              [{"value": "LS", "params": [{"value": "N9", "params": []}]}],            # ) -> Shift + 9
+  "SEMI":                [{"value": "LS", "params": [{"value": "COMMA", "params": []}]}],         # ; -> Shift + ,
+  "DOT":                 [{"value": "DOT", "params": []}],                                        # . -> .
+  "LS(N1)":              [{"value": "LS", "params": [{"value": "N1", "params": []}]}],            # ! -> Shift + 1
+  "LBKT":                [{"value": "LA", "params": [{"value": "N8", "params": []}]}],            # [ -> Option + 8
+  "LS(LBKT)":            [{"value": "LS", "params": [{"value": "LA", "params": [{"value": "N8", "params": []}]}]}], # { -> Shift + Option + 8
+  "LS(RBKT)":            [{"value": "LS", "params": [{"value": "LA", "params": [{"value": "N9", "params": []}]}]}], # } -> Shift + Option + 9
+  "RBKT":                [{"value": "LA", "params": [{"value": "N9", "params": []}]}],            # ] -> Option + 9
+  "LS(FSLH)":            [{"value": "LS", "params": [{"value": "MINUS", "params": []}]}],         # ? -> Shift + +
+  "LS(N3)":              [{"value": "LS", "params": [{"value": "N3", "params": []}]}],            # # -> Shift + 3
+  "LS(N6)":              [{"value": "LS", "params": [{"value": "RBKT", "params": []}]}],          # ^ -> Shift + ¨
+  "EQUAL":               [{"value": "LS", "params": [{"value": "N0", "params": []}]}],            # = -> Shift + 0
+  "LS(MINUS)":           [{"value": "LS", "params": [{"value": "FSLH", "params": []}]}],          # _ -> Shift + -
+  "UNDERSCORE":          [{"value": "LS", "params": [{"value": "FSLH", "params": []}]}],          # Alternate alias for _
+  "LS(N4)":              [{"value": "LA", "params": [{"value": "N4", "params": []}]}],            # $ -> Option + 4
+  "LS(N8)":              [{"value": "SQT", "params": []}],                                        # * -> Key next to Ä (US SQT)
+  "LS(SINGLE_QUOTE)":    [{"value": "LS", "params": [{"value": "N2", "params": []}]}],            # " -> Shift + 2
+  "LS(SQT)":             [{"value": "LS", "params": [{"value": "N2", "params": []}]}],            # Alternate alias for "
+  "LS(GRAVE)":           [{"value": "LA", "params": [{"value": "RBKT", "params": []}]}],          # ~ -> Option + ¨
+  "LS(COMMA)":           [{"value": "NON_US_BSLH", "params": []}],                                # < -> < key
+  "LS(BSLH)":            [{"value": "LA", "params": [{"value": "N7", "params": []}]}],            # | -> Option + 7
+  "MINUS":               [{"value": "FSLH", "params": []}],                                       # - -> - key (US FSLH position)
+  "LS(DOT)":             [{"value": "LS", "params": [{"value": "NON_US_BSLH", "params": []}]}],   # > -> Shift + <
+  "FSLH":                [{"value": "LS", "params": [{"value": "N7", "params": []}]}],            # / -> Shift + 7
+  "SQT":                 [{"value": "LS", "params": [{"value": "SQT", "params": []}]}],           # ' -> Shift + Key next to Ä
+  "SINGLE_QUOTE":        [{"value": "LS", "params": [{"value": "SQT", "params": []}]}],           # Alternate alias for '
+  "BSLH":                [{"value": "LS", "params": [{"value": "LA", "params": [{"value": "N7", "params": []}]}]}], # \ -> Shift + Option + 7
+  "LS(N7)":              [{"value": "LS", "params": [{"value": "N6", "params": []}]}],            # & -> Shift + 6
+  "LS(N5)":              [{"value": "LS", "params": [{"value": "N5", "params": []}]}],            # % -> Shift + 5
+  "LS(SEMI)":            [{"value": "LS", "params": [{"value": "DOT", "params": []}]}],           # : -> Shift + .
+  "LS(N2)":              [{"value": "LA", "params": [{"value": "N2", "params": []}]}]             # @ -> Option + 2
+} as $table |
+
+# ==============================================================================
+# HOW IT WORKS
+# The table above says: "when the Symbol layer has this US key, press that key
+# instead", so the layer types the same characters on a different OS keyboard
+# language. Only plain &kp keys are looked at. Everything else (macros, layer
+# switches, empty keys) and every key not in the table stays exactly as it is.
+# The layer is found by its name, "Symbol" (added by the "Symbol layer" automation).
+# ==============================================================================
+
+"Symbol" as $layerName
+| "sv-SE-mac" as $locale
+| "Swedish (Mac)" as $language
+
+# The key a binding presses, written the way the table spells it: "N9", or "LS(N9)" for Shift+9.
+| def keyName: .params[0] | if (.params // []) == [] then .value else "\(.value)(\(.params[0].value))" end;
+  def isKp: . != null and .value == "&kp" and (.params // []) != [];
+  def translate: if isKp and $table[keyName] then .params = $table[keyName] else . end;
+  def describe: if isKp then keyName else (.value // "empty") end;
+(.keymap // .) as $km
+| if ($km | type) != "object" or ($km.layer_names | type) != "array" or ($km.layers | type) != "array"
+  then error("This file has no layers, so there is nothing to translate.") else . end
+| ($km.layer_names | index($layerName)) as $at
+| if $at == null then error("There is no layer named \"\($layerName)\". Run the Symbol layer automation first, or rename your layer to Symbol.") else . end
+
+| $km.layers[$at] as $before
+| ($before | map(translate)) as $after
+| [range($before | length) | select($before[.] != $after[.])] as $changedAt
+| .locale as $was
+| if ($changedAt | length) == 0 and $was == $locale
+  then . + {_flowReport: {changed: false, message: "No key on your Symbol layer needed changing for \($language), so nothing was changed.", lines: [], log: ["0 of \($before | length) keys matched the \($language) table"]}}
+  else
+    (.keymap // .) |= (.layers[$at] = $after)
+    | .locale = $locale
+    | . + {_flowReport: {
+        changed: true,
+        message: "Updated \($changedAt | length) keys on your Symbol layer for \($language). Your layout language is now \($locale).",
+        lines: ([{ok: true, text: "\($changedAt | length) keys changed on the Symbol layer"}]
+                + (if $was == $locale and ($changedAt | length) > 0
+                   then [{ok: false, text: "Your layout language was already \($locale), so this may have been applied before. If the symbols look wrong, use Undo."}]
+                   elif $was != null and $was != "en-US" and $was != $locale and ($changedAt | length) > 0
+                   then [{ok: false, text: "Your layout language was already \($was), so the Symbol layer may have been translated for it before. If the symbols look wrong, use Undo."}]
+                   else [] end)),
+        log: (["Symbol layer is layer \($at + 1) of \($km.layers | length)", "\($changedAt | length) of \($before | length) keys matched the \($language) table"]
+              + [$changedAt[] | "key \(. + 1): \($before[.] | describe) -> \($after[.] | describe)"])
+      }}
+  end'''
+
+category = "Language tweaks"
+
+successMessage = "Your Symbol layer's punctuation now matches what a Swedish (sv-SE) macOS layout actually produces for each key."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "🇸🇪"
+keywords = ["swedish", "svenska", "sweden", "mac", "apple"]

@@ -1,0 +1,180 @@
+uid = "top_15_zmk_behaviors"
+
+title = "15 handy smart keys"
+
+subtitle = "Community favorites for Backspace, Space and punctuation"
+
+description = '''
+Adds 15 community-favorite smart keys in one go — Backspace, Space and punctuation keys that do more without extra keys. [See the full list](https://drive.google.com/file/d/1NAagQkEACFOs0twGLFfI9aRKWwh_V4Jp/view).
+
+⚠️ Needs tap-dance and mod-morph support in the Layout Editor. Choose **Upgrade my base layer keys automatically** to upgrade your existing Backspace, Space and punctuation keys automatically, or leave it off to assign the new behaviors yourself.'''
+
+script = '''
+# ZMK Autonomous Injection Script - "Top 15 Advanced Behaviors" (V9 - Strict Tap-Dance Outer Logic)
+
+# ==============================================================================
+# 15 SMART KEYS
+# ==============================================================================
+# Adds 29 behaviors (4 macros, 10 mod-morphs, 11 tap-dances, 4 hold-taps). With
+# "Upgrade my base layer keys automatically" it also puts them on the matching keys
+# of the first layer, and adds empty Nav and Num layers if they are missing.
+#
+# It stops, and changes nothing, when the file has no layers or the two layers do
+# not fit within the 32 allowed. A behavior with the same name as one of these is
+# replaced by the new one (the report says how many); everything else is kept.
+# ==============================================================================
+
+def MAX_LAYERS: 32;
+
+# Puts the new items in the list; an item with the same name is replaced, the others stay in place.
+def put_all($new):
+  (. // []) as $have
+  | ($have | map(select(.name as $n | ($new | map(.name) | index($n)) == null))) + $new;
+
+# The layout as it is now, to tell afterwards what changed.
+(if type == "object" and .keymap? then .keymap else . end) as $before |
+
+# --- STEP 0: CHECKS, AND THE NAV / NUM LAYERS THE NEW KEYS SWITCH TO ---
+(.keymap // .) |= (
+  (if (.layers | type) != "array" or (.layers | length) == 0
+   then error("This file has no layers, so there is nothing to add the smart keys to.")
+   else . end) |
+  (if $auto_bind == "yes" then
+    ((.layer_names // []) as $names
+     | ["Nav", "Num"] | map(select(. as $n | $names | index($n) == null))) as $missing |
+    (if (.layers | length) + ($missing | length) > MAX_LAYERS
+     then error("The smart keys need \($missing | length) more layers (\($missing | join(" and "))), but your layout has only \(MAX_LAYERS - (.layers | length)) of the \(MAX_LAYERS) allowed left. Remove a layer first, or switch off the automatic upgrade.")
+     else . end) |
+    (.layers[0] | length) as $layer_size |
+    reduce $missing[] as $name (.;
+      .layer_names += [$name] |
+      .layers += [[range(0; $layer_size) | {"value": "&trans"}]])
+  else . end)
+) |
+
+((.keymap // .).layer_names | index("Nav") // 1) as $idx_nav |
+((.keymap // .).layer_names | index("Num") // 2) as $idx_num |
+
+# ==============================================================================
+# STEP 1: CREATE NESTED BEHAVIORS
+# ==============================================================================
+
+# --- A. MACROS (Strict Root Params) ---
+([
+  { "name": "&mac_eol_semi", "params": [], "description": "4. End of Line Macro", "waitMs": 0, "tapMs": 0, "bindings": [ { "value": "&macro_tap", "params": [] }, { "value": "&kp", "params": [{"value": "END", "params": []}] }, { "value": "&kp", "params": [{"value": "SEMI", "params": []}] }, { "value": "&kp", "params": [{"value": "RET", "params": []}] } ] },
+  { "name": "&mac_ellipsis", "params": [], "description": "9. Ellipsis Macro", "waitMs": 0, "tapMs": 0, "bindings": [ { "value": "&macro_tap", "params": [] }, { "value": "&kp", "params": [{"value": "DOT", "params": []}] }, { "value": "&kp", "params": [{"value": "DOT", "params": []}] }, { "value": "&kp", "params": [{"value": "DOT", "params": []}] } ] },
+  { "name": "&mac_arrow", "params": [], "description": "12. Arrow Macro", "waitMs": 0, "tapMs": 0, "bindings": [ { "value": "&macro_tap", "params": [] }, { "value": "&kp", "params": [{"value": "MINUS", "params": []}] }, { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "DOT", "params": []}]}] } ] },
+  { "name": "&mac_fat_arrow", "params": [], "description": "14. Fat Arrow Macro", "waitMs": 0, "tapMs": 0, "bindings": [ { "value": "&macro_tap", "params": [] }, { "value": "&kp", "params": [{"value": "EQUAL", "params": []}] }, { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "DOT", "params": []}]}] } ] }
+]) as $new_macros |
+
+# --- B. MOD-MORPHS (Inner behaviors that transform Tap 1 based on Shift) ---
+([
+  { "name": "&mm_bspc_del", "description": "1. Mod-Morph: BSPC / DEL", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "BSPC", "params": []}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "DEL", "params": []}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_esc_tilde", "description": "6. Mod-Morph: ESC / ~", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "ESC", "params": []}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "GRAVE", "params": []}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_tab_bck", "description": "8. Mod-Morph: TAB / LS(TAB)", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "TAB", "params": []}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "TAB", "params": []}]}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_dot_colon", "description": "9. Mod-Morph: DOT / COLON", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "DOT", "params": []}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "SEMI", "params": []}]}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_paren_angle", "description": "10. Mod-Morph: ( / <", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N9", "params": []}]}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "COMMA", "params": []}]}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_brack_brace", "description": "10. Mod-Morph: [ / {", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "LBKT", "params": []}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "LBKT", "params": []}]}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_slash_qmark", "description": "11. Mod-Morph: / / ?", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "FSLH", "params": []}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "FSLH", "params": []}]}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_dash_under", "description": "12. Mod-Morph: - / _", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "MINUS", "params": []}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "MINUS", "params": []}]}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_eq_plus", "description": "14. Mod-Morph: = / +", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "EQUAL", "params": []}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "EQUAL", "params": []}]}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] },
+  { "name": "&mm_pscrn_snip", "description": "15. Mod-Morph: PSCRN / Snip", "cases": [ { "binding": { "value": "&kp", "params": [{"value": "PSCRN", "params": []}] }, "mods": [], "keepMods": [] }, { "binding": { "value": "&kp", "params": [{"value": "LG", "params": [{"value": "LS", "params": [{"value": "S", "params": []}]}]}] }, "mods": ["MOD_LSFT", "MOD_RSFT"], "keepMods": [] } ] }
+]) as $new_morphs |
+
+# --- C. TAP-DANCES (Outer behaviors that protect timing windows) ---
+([
+  { "name": "&td_spc_tog", "description": "2. Peek-or-Lock Layer Space", "tappingTermMs": 200, "bindings": [ { "value": "&lt", "params": [{"value": $idx_num}, {"value": "SPACE", "params": []}] }, { "value": "&tog", "params": [{"value": $idx_num}] } ] },
+  { "name": "&td_parens", "description": "3. Space Cadet Evolved", "tappingTermMs": 200, "bindings": [ { "value": "&mt", "params": [{"value": "LSHFT", "params": []}, {"value": "LS", "params": [{"value": "N9", "params": []}]}] }, { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N0", "params": []}]}] } ] },
+  { "name": "&td_enter_eol", "description": "4. Enter / Shift / EOL", "tappingTermMs": 200, "bindings": [ { "value": "&mt", "params": [{"value": "RSHFT", "params": []}, {"value": "RET", "params": []}] }, { "value": "&mac_eol_semi", "params": [] } ] },
+  { "name": "&td_caps_word", "description": "7. Caps Word Trigger", "tappingTermMs": 200, "bindings": [ { "value": "&mt", "params": [{"value": "LSHFT", "params": []}, {"value": "LSHFT", "params": []}] }, { "value": "&caps_word", "params": [] } ] },
+  { "name": "&td_punct_power", "description": "9. Punctuation Powerhouse", "tappingTermMs": 200, "bindings": [ { "value": "&mm_dot_colon", "params": [] }, { "value": "&mac_ellipsis", "params": [] } ] },
+  { "name": "&td_nested_brackets", "description": "10. Coder's Nested Brackets", "tappingTermMs": 200, "bindings": [ { "value": "&mm_paren_angle", "params": [] }, { "value": "&mm_brack_brace", "params": [] } ] },
+  { "name": "&td_quest_excl", "description": "11. Smart Question & Exclamation", "tappingTermMs": 200, "bindings": [ { "value": "&mm_slash_qmark", "params": [] }, { "value": "&kp", "params": [{"value": "LS", "params": [{"value": "N1", "params": []}]}] } ] },
+  { "name": "&td_dash_arrow", "description": "12. Dash & Arrow Macro Key", "tappingTermMs": 200, "bindings": [ { "value": "&mm_dash_under", "params": [] }, { "value": "&mac_arrow", "params": [] } ] },
+  { "name": "&td_media", "description": "13. Media Maestro", "tappingTermMs": 200, "bindings": [ { "value": "&mt", "params": [{"value": "C_VOL_UP", "params": []}, {"value": "C_PP", "params": []}] }, { "value": "&kp", "params": [{"value": "C_NEXT", "params": []}] }, { "value": "&kp", "params": [{"value": "C_PREV", "params": []}] } ] },
+  { "name": "&td_math_logic", "description": "14. Math & Logic Operator", "tappingTermMs": 200, "bindings": [ { "value": "&mm_eq_plus", "params": [] }, { "value": "&mac_fat_arrow", "params": [] } ] },
+  { "name": "&td_power_screen", "description": "15. OS Power & Screenshot Key", "tappingTermMs": 200, "bindings": [ { "value": "&mm_pscrn_snip", "params": [] }, { "value": "&kp", "params": [{"value": "C_SLEEP", "params": []}] } ] }
+]) as $new_dances |
+
+# --- D. HOLD-TAPS (Pure Hold-Taps, Quick-Tap enabled) ---
+([
+  { "name": "&ht_thumb_bspc", "description": "1. God-Tier Thumb Backspace", "bindings": [ "&mo", "&mm_bspc_del" ], "tappingTermMs": 200, "flavor": "tap-preferred" },
+  { "name": "&ht_hrm_safe", "description": "5. Safe HRM Escape (Generic)", "bindings": [ "&kp", "&kp" ], "tappingTermMs": 200, "requirePriorIdleMs": 150, "quickTapMs": 200, "flavor": "tap-preferred" },
+  { "name": "&ht_ctrl_esc", "description": "6. 40% Smart Escape Corner", "bindings": [ "&kp", "&mm_esc_tilde" ], "tappingTermMs": 200, "flavor": "tap-preferred" },
+  { "name": "&ht_alt_tab", "description": "8. App Switcher Engine", "bindings": [ "&kp", "&mm_tab_bck" ], "tappingTermMs": 200, "flavor": "tap-preferred" }
+]) as $new_holds |
+
+(.keymap // .) |= (
+  .macros    = ((.macros // [])    | put_all($new_macros)) |
+  .modMorphs = ((.modMorphs // []) | put_all($new_morphs)) |
+  .tapDances = ((.tapDances // []) | put_all($new_dances)) |
+  .holdTaps  = ((.holdTaps // [])  | put_all($new_holds)) |
+
+  # ==============================================================================
+  # STEP 2: AUTO-ASSIGN ON BASE LAYER (Strict Tap-Dance routing)
+  # ==============================================================================
+  (if $auto_bind == "yes" then
+    {
+      "BSPC":     {"value": "&ht_thumb_bspc", "params": [{"value": $idx_nav}]},
+      "SPACE":    {"value": "&td_spc_tog"},
+      "RET":      {"value": "&td_enter_eol"},
+      "DOT":      {"value": "&td_punct_power"},
+      "LBKT":     {"value": "&td_nested_brackets"},
+      "FSLH":     {"value": "&td_quest_excl"},
+      "MINUS":    {"value": "&td_dash_arrow"},
+      "EQUAL":    {"value": "&td_math_logic"},
+      "ESC":      {"value": "&ht_ctrl_esc", "params": [{"value": "LCTRL", "params": []}]},
+      "TAB":      {"value": "&ht_alt_tab", "params": [{"value": "LALT", "params": []}]},
+      "C_VOL_UP": {"value": "&td_media"},
+      "PSCRN":    {"value": "&td_power_screen"},
+      "LSHFT":    {"value": "&td_caps_word"}
+    } as $map |
+
+    .layers[0] |= map(
+      if type == "object" and .value == "&kp" and .params and (.params | length > 0) and (.params[0].value | in($map)) then
+        $map[.params[0].value] + (if .decoration then {decoration: .decoration} else {} end)
+      else
+        .
+      end
+    )
+  else . end)
+)
+
+# --- REPORT ---
+| (if type == "object" and .keymap? then .keymap else . end) as $after
+| ($new_macros + $new_morphs + $new_dances + $new_holds | map(.name)) as $names
+| ([$before.macros, $before.modMorphs, $before.tapDances, $before.holdTaps | (. // [])[] | select(.name as $n | $names | index($n))] | length) as $replaced
+| ([range(0; ($before.layers[0] | length)) as $i | select($before.layers[0][$i] != $after.layers[0][$i])] | length) as $upgraded
+| (["Nav", "Num"] | map(select(. as $n | (($before.layer_names // []) | index($n)) == null and (($after.layer_names // []) | index($n)) != null))) as $newLayers
+| (["Nav", "Num"] | map(select(. as $n | (($after.layer_names // []) | index($n)) == null))) as $noLayers
+| if $before == $after then
+    . + {_flowReport: {changed: false, message: "Nothing was changed: the smart keys are already in your layout.", lines: [], log: ["identical to the existing behaviors"]}}
+  else
+    . + {_flowReport: {
+        changed: true,
+        lines: ([{ok: true, text: "Added \($names | length) smart-key behaviors\(if $replaced > 0 then " (\($replaced) with the same name were replaced)" else "" end)"}]
+                + (if $auto_bind != "yes" then [] elif $upgraded > 0 then [{ok: true, text: "Upgraded \($upgraded) keys on your first layer"}] else [{ok: false, text: "None of the keys on your first layer matched, so assign the new behaviors to keys yourself."}] end)
+                + (if ($newLayers | length) > 0 then [{ok: true, text: "Added the empty \($newLayers | join(" and ")) layer\(if ($newLayers | length) > 1 then "s" else "" end) that the new keys switch to"}] else [] end)
+                + (if $auto_bind != "yes" and ($noLayers | length) > 0 then [{ok: false, text: "Your layout has no \($noLayers | join(" or ")) layer, so the new Backspace and Space keys point at layers \($idx_nav + 1) and \($idx_num + 1) by number. Check where those lead before you use them."}] else [] end)),
+        log: ["replaced: \($replaced), upgraded keys: \($upgraded), new layers: \($newLayers | join(", "))"]
+      }}
+  end'''
+
+category = "Shortcuts & macros"
+
+successMessage = "The 15 community-favorite smart keys are ready to use. If you chose to upgrade your base layer keys, your Backspace, Space and punctuation keys already use them; otherwise assign them to keys yourself."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "🏆"
+advanced = true
+keywords = ["tap dance", "mod morph", "backspace", "space"]
+
+[[param]]
+id = "auto_bind"
+label = "Upgrade my base layer keys automatically"
+type = "select"
+options = ["yes", "no"]
+labels = ["Yes", "No"]
+default = "yes"

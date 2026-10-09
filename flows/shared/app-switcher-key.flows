@@ -1,0 +1,72 @@
+uid = "app_switcher_key"
+
+title = "Switch apps with one key"
+
+subtitle = "One-key Alt-Tab or Cmd-Tab"
+
+description = '''
+Makes Alt-Tab (Windows, Linux) or Cmd-Tab (Mac) a single keypress. Pick your computer below. It adds one macro, **&AppSwitch** — assign it to any key or combo to start using it.'''
+
+script = '''
+# ==============================================================================
+# Switch apps with one key
+#
+# Adds one macro, &AppSwitch: hold the switcher key ($system: Alt, or Cmd on a Mac),
+# tap Tab (the switcher stays open while it is held), release it. Assign it to any key or combo. Nothing else is touched.
+# If a behavior called &AppSwitch already exists, nothing is changed and the result
+# screen says so. Existing macros are never changed.
+# ==============================================================================
+
+# A macro control step (&macro_press, &macro_tap, &macro_release) and a key step.
+def step($name): {value: $name, params: []};
+def key($behavior; $code): {value: $behavior, params: [{value: $code}]};
+
+# $system is the "system" parameter: "alt" (Windows, Linux) or "cmd" (macOS).
+def appSwitch($system):
+  (if $system == "cmd" then {mod: "LGUI", label: "Cmd-Tab"} else {mod: "LALT", label: "Alt-Tab"} end) as $s
+  | {
+  name: "&AppSwitch",
+  description: "\($s.label) App Switcher Macro",
+  waitMs: 100,
+  tapMs: 40,
+  params: [],
+  bindings: [
+    step("&macro_press"), key("&kp"; $s.mod),
+    step("&macro_tap"),   key("&kp"; "TAB"),
+    step("&macro_tap"),   key("&sk"; $s.mod),
+    step("&macro_release"), key("&kp"; $s.mod)
+  ]
+};
+
+# Every behavior name in the layout, whichever list it lives in (names must be unique across all of them).
+def behaviorNames: [(.macros, .holdTaps, .tapDances, .modMorphs, .stickyKeys)[]? | .name];
+
+(.keymap // .) as $km
+| if ($km | type) != "object" or ($km.layers | type) != "array" then error("This file has no layers, so there is nothing to add the macro to.") else . end
+| if ($km | behaviorNames | index("&AppSwitch")) != null then
+    if ($km.macros // [] | map(.name) | index("&AppSwitch")) != null
+    then . + {_flowReport: {changed: false, message: "Your layout already has an &AppSwitch macro, so nothing was changed. Assign it to a key or combo to use it.", lines: [], log: ["&AppSwitch exists in the macros list"]}}
+    else error("A behavior named &AppSwitch already exists in this layout and is not a macro. Rename it first, then run this again.") end
+  else
+    (.keymap // .) |= (.macros = ((.macros // []) + [appSwitch($system)]))
+    | . + {_flowReport: {changed: true, lines: [{ok: true, text: "Added the &AppSwitch macro"}], log: ["added &AppSwitch (\($system)) with \(appSwitch($system).bindings | length) steps"]}}
+  end'''
+
+category = "Shortcuts & macros"
+
+successMessage = "A new &AppSwitch macro is ready. Assign it to any key or combo for one-press app switching."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "💊"
+keywords = ["alt tab", "cmd tab", "windows", "switch"]
+
+
+[[param]]
+id = "system"
+label = "Your computer"
+type = "select"
+options = ["alt", "cmd"]
+labels = ["Windows or Linux (Alt-Tab)", "Mac (Cmd-Tab)"]
+default = "alt"

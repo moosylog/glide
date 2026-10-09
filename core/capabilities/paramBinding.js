@@ -1,0 +1,3 @@
+/*! GLIDE (c) 2026 Moosy. All rights reserved. See LICENSE.txt. */
+(function(){"use strict";const s=window.GlideCore||(window.GlideCore={}),e=(i,t)=>{if(i.type==="boolean")return t?"true":"false";if(i.type==="number"){const r=Number.isFinite(Number(t))&&String(t).trim()!==""?String(t).trim():String(i.default);return r.startsWith("-")?`(${r})`:r}return JSON.stringify(String(t??""))};Object.assign(s,{renderParamLiteral:e,buildScriptWithParams:(i,t,r)=>{const b=i||{};let o="";return(i||[]).forEach(n=>{const c=t&&Object.prototype.hasOwnProperty.call(t,n.id)?t[n.id]:n.default;o+=`${e(n,c)} as $${n.id} | 
+`}),o+r}})})();

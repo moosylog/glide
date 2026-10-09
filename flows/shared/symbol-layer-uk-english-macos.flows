@@ -1,0 +1,89 @@
+uid = "symbols2_gb_mac"
+
+title = "Symbol layer: UK English (Mac)"
+
+subtitle = "macOS (en-GB)"
+
+description = '''
+Fixes three keys (Hash, Grave, Tilde) on your **Symbol** layer for macOS's UK English layout, where Apple maps them differently than Windows and Linux.
+
+⚠️ Add the **Symbol layer** automation first. If your macOS input source is "British - PC" rather than "British", use **Symbol layer: UK English** instead. (These mappings are generated automatically, not hand-verified.)'''
+
+script = '''
+# ==============================================================================
+#             MAC UK ENGLISH SYMBOL MAPPER (For MoErgo / ZMK)
+#             OS TARGET: MACOS (Standard "British" layout)
+# ==============================================================================
+
+{
+  # --- Hash (#) ---
+  # On Mac UK, Shift+3 is £. Hash is Option+3 (mapped as Left Alt in ZMK).
+  "HASH":                [{"value": "LA", "params": [{"value": "N3", "params": []}]}],
+  "LS(N3)":              [{"value": "LA", "params": [{"value": "N3", "params": []}]}],
+
+  # --- Grave (`) and Tilde (~) ---
+  # On Mac UK, the US grave key outputs §. Grave and Tilde live on the ISO Extra Key.
+  "GRAVE":               [{"value": "NON_US_BSLH", "params": []}],
+  "TILDE":               [{"value": "LS", "params": [{"value": "NON_US_BSLH", "params": []}]}],
+  "LS(GRAVE)":           [{"value": "LS", "params": [{"value": "NON_US_BSLH", "params": []}]}]
+  
+  # Note: macOS UK keeps @ and " in their US positions, and maps ANSI Backslash natively to \\ and |.
+  # Therefore, those keys do not need remapping!
+} as $table |
+
+# ==============================================================================
+# HOW IT WORKS
+# The table above says: "when the Symbol layer has this US key, press that key
+# instead", so the layer types the same characters on a different OS keyboard
+# language. Only plain &kp keys are looked at. Everything else (macros, layer
+# switches, empty keys) and every key not in the table stays exactly as it is.
+# The layer is found by its name, "Symbol" (added by the "Symbol layer" automation).
+# ==============================================================================
+
+"Symbol" as $layerName
+| "en-GB-mac" as $locale
+| "UK English (Mac)" as $language
+
+# The key a binding presses, written the way the table spells it: "N9", or "LS(N9)" for Shift+9.
+| def keyName: .params[0] | if (.params // []) == [] then .value else "\(.value)(\(.params[0].value))" end;
+  def isKp: . != null and .value == "&kp" and (.params // []) != [];
+  def translate: if isKp and $table[keyName] then .params = $table[keyName] else . end;
+  def describe: if isKp then keyName else (.value // "empty") end;
+(.keymap // .) as $km
+| if ($km | type) != "object" or ($km.layer_names | type) != "array" or ($km.layers | type) != "array"
+  then error("This file has no layers, so there is nothing to translate.") else . end
+| ($km.layer_names | index($layerName)) as $at
+| if $at == null then error("There is no layer named \"\($layerName)\". Run the Symbol layer automation first, or rename your layer to Symbol.") else . end
+
+| $km.layers[$at] as $before
+| ($before | map(translate)) as $after
+| [range($before | length) | select($before[.] != $after[.])] as $changedAt
+| .locale as $was
+| if ($changedAt | length) == 0 and $was == $locale
+  then . + {_flowReport: {changed: false, message: "No key on your Symbol layer needed changing for \($language), so nothing was changed.", lines: [], log: ["0 of \($before | length) keys matched the \($language) table"]}}
+  else
+    (.keymap // .) |= (.layers[$at] = $after)
+    | .locale = $locale
+    | . + {_flowReport: {
+        changed: true,
+        message: "Updated \($changedAt | length) keys on your Symbol layer for \($language). Your layout language is now \($locale).",
+        lines: ([{ok: true, text: "\($changedAt | length) keys changed on the Symbol layer"}]
+                + (if $was == $locale and ($changedAt | length) > 0
+                   then [{ok: false, text: "Your layout language was already \($locale), so this may have been applied before. If the symbols look wrong, use Undo."}]
+                   elif $was != null and $was != "en-US" and $was != $locale and ($changedAt | length) > 0
+                   then [{ok: false, text: "Your layout language was already \($was), so the Symbol layer may have been translated for it before. If the symbols look wrong, use Undo."}]
+                   else [] end)),
+        log: (["Symbol layer is layer \($at + 1) of \($km.layers | length)", "\($changedAt | length) of \($before | length) keys matched the \($language) table"]
+              + [$changedAt[] | "key \(. + 1): \($before[.] | describe) -> \($after[.] | describe)"])
+      }}
+  end'''
+
+category = "Language tweaks"
+
+successMessage = "Your Symbol layer's Hash, Grave, and Tilde keys now match what UK English macOS actually produces. If your macOS input source is \"British - PC\" rather than \"British\", use the Windows/Linux UK automation instead."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "🇬🇧"
+keywords = ["british", "uk", "mac", "apple"]
