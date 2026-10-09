@@ -38,5 +38,9 @@
   "kp.LCTRL": {"mac": ["macos-ctrl"]},
   "kp.RCTRL": {"mac": ["macos-ctrl"]},
   "kp.LALT": {"mac": ["macos-alt"]},
-  "kp.RALT": {"mac": ["macos-alt"]}
+  "kp.RALT": {"mac": ["macos-alt"]},
+  "bt_0": ["bluetooth", {"text": "0"}],
+  "bt_1": ["bluetooth", {"text": "1"}],
+  "bt_2": ["bluetooth", {"text": "2"}],
+  "bt_3": ["bluetooth", {"text": "3"}]
 }
