@@ -1,0 +1,115 @@
+uid = "hrm_timing"
+
+title = "Tune home-row mod timing"
+
+subtitle = "One preset for all your fingers, plus a faster / slower nudge"
+
+description = '''
+Changes how long you have to hold a home-row key before it becomes a modifier, for every finger at once.
+
+Pick a preset, then nudge it: if you get accidental modifiers, make it **slower**; if holds feel sluggish, make it **faster**.
+
+- **Urob Timeless** and **BraveKarma** are well-known starting points.
+- **Level 0–5** are the Glorious Engrammer levels, from 0 (Sunaku default) and 1 (easy, for beginners) up to 5 (expert, fastest).
+- **Keep current values** only applies the nudge.
+
+Works on TailorKey-style hold-taps (their name contains "tkz" and a finger: index, middy, ring, pinky, thumb or space). Your layers and keys are not touched. Urob and BraveKarma leave the thumb and space keys as they are.'''
+
+script = '''
+# Per-finger tables for levels 0-5: tapping term (tt), quick tap (qt), prior idle (pi)
+{
+  "index": {tt: [180,530,430,330,230,130], qt: [300,650,550,450,350,250], pi: [100,450,350,250,150,50]},
+  "middy": {tt: [210,560,460,360,260,160], qt: [300,650,550,450,350,250], pi: [150,500,400,300,200,100]},
+  "ring":  {tt: [240,590,490,390,290,190], qt: [300,650,550,450,350,250], pi: [150,500,400,300,200,100]},
+  "pinky": {tt: [270,620,520,420,320,220], qt: [300,650,550,450,350,250], pi: [150,500,400,300,200,100]},
+  "thumb": {tt: [200,550,450,350,250,150], qt: [300,650,550,450,350,250], pi: [0,0,0,0,0,0]},
+  "space": {tt: [200,550,450,350,250,150], qt: [150,500,400,300,200,100], pi: [0,0,0,0,0,0]}
+} as $matrix |
+
+($nudge_ms | tonumber? // 0) as $nudge |
+
+# Which finger a hold-tap belongs to (first finger word in its name), or null
+def finger:
+  ascii_downcase as $n
+  | if ($n | contains("tkz")) | not then null
+    else
+      ([("index","middy","middle","ring","pinky","pink","thumb","space") as $k
+        | ($n | index($k)) as $i | select($i != null) | {k: $k, i: $i}]
+       | sort_by(.i) | first | .k // null)
+      | if . == "middle" then "middy" elif . == "pink" then "pinky" else . end
+    end;
+
+def values($f; $name):
+  if $preset == "keep" then null
+  elif $preset == "urob" then
+    if ($f == "thumb" or $f == "space") then null
+    else {tt: 280, qt: 175, pi: 150, flavor: "balanced"} end
+  elif $preset == "brave" then
+    if ($f == "thumb" or $f == "space") then null
+    elif $f == "index" then {tt: 200, qt: 150, pi: 0, flavor: "balanced"}
+    else {tt: 250, qt: 150, pi: 100, flavor: "balanced"} end
+  else
+    ($preset | tonumber) as $l
+    | $matrix[$f] as $m
+    | {tt: $m.tt[$l], qt: $m.qt[$l], pi: $m.pi[$l],
+       flavor: (if ($f == "thumb" or $f == "space") then "balanced" else "tap-preferred" end)}
+    | if $f == "index" and ($name | ascii_downcase | contains("right")) then .pi = 80 else . end
+  end;
+
+. as $before
+| (.holdTaps // []) as $hts
+| ([$hts[] | select(.name | finger != null)] | length) as $found
+| if $found == 0 then
+    . + {_flowReport: {changed: false,
+         message: "No home-row hold-taps were found. This tool looks for behaviors named like TailorKey ones (\"tkz\" plus index, middy, ring, pinky, thumb or space), so nothing was changed.",
+         lines: [], log: ["no tkz hold-taps"]}}
+  else
+    .holdTaps |= map(
+      (.name | finger) as $f
+      | if $f == null then .
+        else
+          values($f; .name) as $v
+          | (if $v != null then
+               .tappingTermMs = $v.tt | .quickTapMs = $v.qt | .requirePriorIdleMs = $v.pi | .flavor = $v.flavor
+               | del(.retroTap, .holdWhileUndecided, .holdWhileUndecidedLinger)
+             else . end)
+          | if $nudge != 0 and ($f != "thumb" and $f != "space" or $preset != "urob" and $preset != "brave") then
+              .tappingTermMs = ([((.tappingTermMs // 0) + $nudge), 50] | max)
+            else . end
+        end)
+    | . as $after
+    | ([range(0; ($hts | length)) | select($hts[.] != $after.holdTaps[.])] | length) as $changed
+    | if $changed == 0 then
+        $after + {_flowReport: {changed: false, message: "Nothing was changed: your timing already matches.", lines: [], log: ["identical"]}}
+      else
+        $after + {_flowReport: {changed: true,
+          lines: ([{ok: true, text: "Updated the timing of \($changed) of \($found) home-row hold-taps"}]
+                 + (if $nudge != 0 then [{ok: true, text: "Nudged the tapping term by \($nudge) ms (\(if $nudge > 0 then "slower" else "faster" end))"}] else [] end)
+                 + (if ($preset == "urob" or $preset == "brave") then [{ok: true, text: "Thumb and space keys were left as they were"}] else [] end)),
+          log: ["hold-taps found: \($found), changed: \($changed), nudge: \($nudge)"]}}
+      end
+  end'''
+
+category = "Modifier keys"
+
+successMessage = "Timing updated. Type normally for a day or two, then nudge slower (accidental modifiers) or faster (sluggish holds) and run this again."
+
+[manifest]
+author = "moosyresearch"
+keyboards = ["go60", "glove80"]
+icon = "⏱️"
+keywords = ["home row", "hrm", "timing", "tapping term", "urob", "bravekarma", "engrammer", "tailorkey", "tuner"]
+
+[[param]]
+id = "preset"
+label = "Preset"
+type = "select"
+options = ["keep", "urob", "brave", "0", "1", "2", "3", "4", "5"]
+labels = ["Keep current values", "Urob Timeless", "BraveKarma", "Level 0 – Sunaku (default)", "Level 1 – Easy (beginner)", "Level 2 – Slower", "Level 3 – Normal", "Level 4 – Faster", "Level 5 – Expert"]
+default = "3"
+
+[[param]]
+id = "nudge_ms"
+label = "Faster / slower (ms, e.g. 20 = slower, -20 = faster)"
+type = "number"
+default = "0"

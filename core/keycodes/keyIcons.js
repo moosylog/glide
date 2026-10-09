@@ -1,0 +1,2 @@
+/*! GLIDE (c) 2026 Moosy. All rights reserved. See LICENSE.txt. */
+(function(){"use strict";const t=window.GlideCore||(window.GlideCore={});function l(r,u,c){const s=c||t.keyIconData;if(!s||!r||typeof r.value!="string")return null;const e=r.params&&r.params[0];if(r.params&&r.params.length>1||e&&e.params&&e.params.length)return null;const p=r.value.replace(/^&/,"")+(e?"."+e.value:""),a=s.map[p],n=Array.isArray(a)?a:a&&a[u];if(!n)return null;const o=n.map(m=>s.svgs[m]);return o.every(Boolean)?o:null}Object.assign(t,{keyIconsFor:l})})();

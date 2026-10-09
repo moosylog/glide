@@ -1,0 +1,8 @@
+{
+  "rgb_ug.RGB_BRI": ["rgb-brightness", "increase"],
+  "rgb_ug.RGB_BRD": ["rgb-brightness", "decrease"],
+  "rgb_ug.RGB_HUI": ["rgb-hue", "increase"],
+  "rgb_ug.RGB_HUD": ["rgb-hue", "decrease"],
+  "bootloader":     ["bootloader"],
+  "kp.LGUI":        { "mac": ["command"], "win": ["windows"] }
+}
