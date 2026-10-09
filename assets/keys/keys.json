@@ -30,8 +30,13 @@
   "kp.C_PREV": ["previous"],
   "kp.C_BRI_UP": ["brightness-up"],
   "kp.C_BRI_DN": ["brightness-down"],
-  "kp.RET": ["enter"],
-  "kp.LSHFT": ["shift"],
-  "kp.RSHFT": ["shift"],
-  "magic": ["magic"]
+  "kp.RET": {"mac": ["ret"]},
+  "kp.LSHFT": {"mac": ["shift"]},
+  "kp.RSHFT": {"mac": ["shift"]},
+  "magic": ["magic"],
+  "kp.TAB": ["tab"],
+  "kp.LCTRL": {"mac": ["macos-ctrl"]},
+  "kp.RCTRL": {"mac": ["macos-ctrl"]},
+  "kp.LALT": {"mac": ["macos-alt"]},
+  "kp.RALT": {"mac": ["macos-alt"]}
 }
