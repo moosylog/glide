@@ -1,0 +1,5 @@
+[
+  {"rule": "custom",    "light": "#efb47e", "dark": "#efb47e"},
+  {"rule": "bluetooth", "light": "#b5caec", "dark": "#6a6a6a"},
+  {"rule": "action",    "light": "#2e8a59", "dark": "#46cf87"}
+]
