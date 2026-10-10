@@ -1,18 +1,18 @@
 <!DOCTYPE html>
-<html data-b="a991096f423e1618e89bf64a" lang="en" class="oled">
+<html data-b="a1df9ddbfe728075ab034a81" lang="en" class="oled">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GLIDE — Graphical Layout & Intent Definition Editor</title>
-    <script>window.GLIDE_BUILD = /*stamp*/{ channel: 'stable', build: '224', id: '59c3cccc' }/*/stamp*/;</script>
-    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=59c3cccc">
-    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png?v=59c3cccc">
-    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png?v=59c3cccc">
-    <link rel="icon" href="favicon.ico?v=59c3cccc">
-    <link rel="apple-touch-icon" href="apple-touch-icon.png?v=59c3cccc">
+    <script>window.GLIDE_BUILD = /*stamp*/{ channel: 'stable', build: '226', id: '2ce224bc' }/*/stamp*/;</script>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=2ce224bc">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png?v=2ce224bc">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png?v=2ce224bc">
+    <link rel="icon" href="favicon.ico?v=2ce224bc">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png?v=2ce224bc">
     <script defer src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
     <script defer src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
-    <link rel="stylesheet" href="core/styles/tailwind.generated.css?v=59c3cccc">
+    <link rel="stylesheet" href="core/styles/tailwind.generated.css?v=2ce224bc">
     <style>
         :root, .print-sheet {
             --bg-base: #f3f4f6; --bg-surface: #ffffff; --bg-panel: #e5e7eb; --bg-card: #f9fafb;
@@ -114,6 +114,9 @@
         .p-key.drag-source { opacity: 0.35; transform: scale(0.95); }
         .p-key.drag-over { box-shadow: 0 0 0 3px var(--bg-base), 0 0 0 5px var(--accent-primary) !important; border-style: dashed !important; transform: scale(1.08); }
         .p-key-outer.drag-over::after { content: "\21C4  swap"; position: absolute; left: 50%; top: -9px; transform: translateX(-50%); z-index: 30; padding: 1px 7px; border-radius: 999px; font-size: 9px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; background: var(--accent-primary); color: #fff; pointer-events: none; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+        body.is-copying .p-key-outer.drag-over::after { content: "+  copy"; }
+        body.is-dragging.is-copying, body.is-dragging.is-copying * { cursor: copy !important; }
+        body.is-copying .drag-ghost::after { content: "+"; position: absolute; right: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--accent-primary); color: #fff; font: 700 14px/18px sans-serif; text-align: center; }
         /* Drag feedback shared by key swap, layer reorder and action-slot swap (see GlideUI.dragGhost in ui/shared.js) */
         .drag-ghost { position: fixed; left: 0; top: 0; z-index: 100000; pointer-events: none; opacity: .92; filter: drop-shadow(0 10px 18px rgba(0,0,0,.55)); will-change: transform; border-radius: 12px; overflow: hidden; }
         body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select: none !important; -webkit-user-select: none !important; }
@@ -175,70 +178,70 @@
         <div class="glide-splash-label">Loading…</div>
     </div>
     <div id="root" class="h-dvh w-screen flex overflow-hidden text-app-text bg-app-base transition-colors duration-300"></div>
-        <script defer src="core/zmk/naming.js?v=59c3cccc"></script>
-    <script defer src="core/zmk/layerPointers.js?v=59c3cccc"></script>
-    <script defer src="core/zmk/combos.js?v=59c3cccc"></script>
-    <script defer src="core/zmk/inputProcessors.js?v=59c3cccc"></script>
-    <script defer src="core/zmk/macro.js?v=59c3cccc"></script>
-    <script defer src="core/zmk/stickyKey.js?v=59c3cccc"></script>
-    <script defer src="core/zmk/modMorph.js?v=59c3cccc"></script>
-    <script defer src="core/zmk/holdTap.js?v=59c3cccc"></script>
-    <script defer src="core/zmk/tapDance.js?v=59c3cccc"></script>
-    <script defer src="core/keycodes/zmkMap.js?v=59c3cccc"></script>
-    <script defer src="core/keycodes/zmkCatalog.js?v=59c3cccc"></script>
-    <script defer src="core/keycodes/zmkKeycodes.js?v=59c3cccc"></script>
-    <script defer src="core/keycodes/moergoNatives.js?v=59c3cccc"></script>
-    <script defer src="core/keycodes/modChain.js?v=59c3cccc"></script>
-    <script defer src="core/keycodes/modBinding.js?v=59c3cccc"></script>
-    <script defer src="core/keycodes/keyPress.js?v=59c3cccc"></script>
-    <script defer src="core/keycodes/keyIconData.js?v=59c3cccc"></script>
-    <script defer src="core/keycodes/keyIcons.js?v=59c3cccc"></script>
-    <script defer src="core/locale/enUS.js?v=59c3cccc"></script>
-    <script defer src="core/locale/localeTable.js?v=59c3cccc"></script>
-    <script defer src="core/keycodes/pickerLayout.js?v=59c3cccc"></script>
-    <script defer src="core/geometry/convertGeo.js?v=59c3cccc"></script>
-    <script defer src="core/geometry/glove80.js?v=59c3cccc"></script>
-    <script defer src="core/geometry/go60.js?v=59c3cccc"></script>
-    <script defer src="core/integrity/references.js?v=59c3cccc"></script>
-    <script defer src="core/integrity/adviceRules.js?v=59c3cccc"></script>
-    <script defer src="core/integrity/advice.js?v=59c3cccc"></script>
-    <script defer src="core/gc.js?v=59c3cccc"></script>
-    <script defer src="core/integrity/gate.js?v=59c3cccc"></script>
-    <script defer src="core/usage.js?v=59c3cccc"></script>
-    <script defer src="core/slots.js?v=59c3cccc"></script>
-    <script defer src="core/describe.js?v=59c3cccc"></script>
-    <script defer src="core/integrity/layers.js?v=59c3cccc"></script>
-    <script defer src="core/layerShift.js?v=59c3cccc"></script>
-    <script defer src="core/print/printPlan.js?v=59c3cccc"></script>
-    <script defer src="core/behaviors/schemas.js?v=59c3cccc"></script>
-    <script defer src="core/behaviors/registry.js?v=59c3cccc"></script>
-    <script defer src="core/behaviors/compile.js?v=59c3cccc"></script>
-    <script defer src="vendor/ajv.min.js?v=59c3cccc"></script>
-    <script defer src="core/integrity/schemaValidator.js?v=59c3cccc"></script>
-    <script defer src="core/io/layoutSchema.js?v=59c3cccc"></script>
-    <script defer src="core/io/layoutRecords.js?v=59c3cccc"></script>
-    <script defer src="core/io/loadLayout.js?v=59c3cccc"></script>
-    <script defer src="core/io/exportLayout.js?v=59c3cccc"></script>
-    <script defer src="core/capabilities/paramBinding.js?v=59c3cccc"></script>
-    <script defer src="core/capabilities/catalogSchema.js?v=59c3cccc"></script>
-    <script defer src="core/capabilities/jqRunner.js?v=59c3cccc"></script>
-    <script defer src="core/capabilities/applyFlow.js?v=59c3cccc"></script>
-    <script defer src="ui/hooks.js?v=59c3cccc"></script>
-    <script defer src="ui/appActions.js?v=59c3cccc"></script>
-    <script defer src="ui/shared.js?v=59c3cccc"></script>
-    <script defer src="ui/topBar.js?v=59c3cccc"></script>
-    <script defer src="ui/canvas.js?v=59c3cccc"></script>
-    <script defer src="ui/sidebar.js?v=59c3cccc"></script>
-    <script defer src="ui/sharedForms.js?v=59c3cccc"></script>
-    <script defer src="ui/flowScreens.js?v=59c3cccc"></script>
-    <script defer src="ui/flowModals.js?v=59c3cccc"></script>
-    <script defer src="ui/modals.js?v=59c3cccc"></script>
-    <script defer src="ui/printSheet.js?v=59c3cccc"></script>
-    <script defer src="ui/builderInputs.js?v=59c3cccc"></script>
-    <script defer src="ui/builders.js?v=59c3cccc"></script>
-    <script defer src="ui/holdTapBuilders.js?v=59c3cccc"></script>
-    <script defer src="ui/inspector.js?v=59c3cccc"></script>
-    <script defer src="ui/slotEditor.js?v=59c3cccc"></script>
-    <script defer src="app.js?v=59c3cccc"></script>
+        <script defer src="core/zmk/naming.js?v=2ce224bc"></script>
+    <script defer src="core/zmk/layerPointers.js?v=2ce224bc"></script>
+    <script defer src="core/zmk/combos.js?v=2ce224bc"></script>
+    <script defer src="core/zmk/inputProcessors.js?v=2ce224bc"></script>
+    <script defer src="core/zmk/macro.js?v=2ce224bc"></script>
+    <script defer src="core/zmk/stickyKey.js?v=2ce224bc"></script>
+    <script defer src="core/zmk/modMorph.js?v=2ce224bc"></script>
+    <script defer src="core/zmk/holdTap.js?v=2ce224bc"></script>
+    <script defer src="core/zmk/tapDance.js?v=2ce224bc"></script>
+    <script defer src="core/keycodes/zmkMap.js?v=2ce224bc"></script>
+    <script defer src="core/keycodes/zmkCatalog.js?v=2ce224bc"></script>
+    <script defer src="core/keycodes/zmkKeycodes.js?v=2ce224bc"></script>
+    <script defer src="core/keycodes/moergoNatives.js?v=2ce224bc"></script>
+    <script defer src="core/keycodes/modChain.js?v=2ce224bc"></script>
+    <script defer src="core/keycodes/modBinding.js?v=2ce224bc"></script>
+    <script defer src="core/keycodes/keyPress.js?v=2ce224bc"></script>
+    <script defer src="core/keycodes/keyIconData.js?v=2ce224bc"></script>
+    <script defer src="core/keycodes/keyIcons.js?v=2ce224bc"></script>
+    <script defer src="core/locale/enUS.js?v=2ce224bc"></script>
+    <script defer src="core/locale/localeTable.js?v=2ce224bc"></script>
+    <script defer src="core/keycodes/pickerLayout.js?v=2ce224bc"></script>
+    <script defer src="core/geometry/convertGeo.js?v=2ce224bc"></script>
+    <script defer src="core/geometry/glove80.js?v=2ce224bc"></script>
+    <script defer src="core/geometry/go60.js?v=2ce224bc"></script>
+    <script defer src="core/integrity/references.js?v=2ce224bc"></script>
+    <script defer src="core/integrity/adviceRules.js?v=2ce224bc"></script>
+    <script defer src="core/integrity/advice.js?v=2ce224bc"></script>
+    <script defer src="core/gc.js?v=2ce224bc"></script>
+    <script defer src="core/integrity/gate.js?v=2ce224bc"></script>
+    <script defer src="core/usage.js?v=2ce224bc"></script>
+    <script defer src="core/slots.js?v=2ce224bc"></script>
+    <script defer src="core/describe.js?v=2ce224bc"></script>
+    <script defer src="core/integrity/layers.js?v=2ce224bc"></script>
+    <script defer src="core/layerShift.js?v=2ce224bc"></script>
+    <script defer src="core/print/printPlan.js?v=2ce224bc"></script>
+    <script defer src="core/behaviors/schemas.js?v=2ce224bc"></script>
+    <script defer src="core/behaviors/registry.js?v=2ce224bc"></script>
+    <script defer src="core/behaviors/compile.js?v=2ce224bc"></script>
+    <script defer src="vendor/ajv.min.js?v=2ce224bc"></script>
+    <script defer src="core/integrity/schemaValidator.js?v=2ce224bc"></script>
+    <script defer src="core/io/layoutSchema.js?v=2ce224bc"></script>
+    <script defer src="core/io/layoutRecords.js?v=2ce224bc"></script>
+    <script defer src="core/io/loadLayout.js?v=2ce224bc"></script>
+    <script defer src="core/io/exportLayout.js?v=2ce224bc"></script>
+    <script defer src="core/capabilities/paramBinding.js?v=2ce224bc"></script>
+    <script defer src="core/capabilities/catalogSchema.js?v=2ce224bc"></script>
+    <script defer src="core/capabilities/jqRunner.js?v=2ce224bc"></script>
+    <script defer src="core/capabilities/applyFlow.js?v=2ce224bc"></script>
+    <script defer src="ui/hooks.js?v=2ce224bc"></script>
+    <script defer src="ui/appActions.js?v=2ce224bc"></script>
+    <script defer src="ui/shared.js?v=2ce224bc"></script>
+    <script defer src="ui/topBar.js?v=2ce224bc"></script>
+    <script defer src="ui/canvas.js?v=2ce224bc"></script>
+    <script defer src="ui/sidebar.js?v=2ce224bc"></script>
+    <script defer src="ui/sharedForms.js?v=2ce224bc"></script>
+    <script defer src="ui/flowScreens.js?v=2ce224bc"></script>
+    <script defer src="ui/flowModals.js?v=2ce224bc"></script>
+    <script defer src="ui/modals.js?v=2ce224bc"></script>
+    <script defer src="ui/printSheet.js?v=2ce224bc"></script>
+    <script defer src="ui/builderInputs.js?v=2ce224bc"></script>
+    <script defer src="ui/builders.js?v=2ce224bc"></script>
+    <script defer src="ui/holdTapBuilders.js?v=2ce224bc"></script>
+    <script defer src="ui/inspector.js?v=2ce224bc"></script>
+    <script defer src="ui/slotEditor.js?v=2ce224bc"></script>
+    <script defer src="app.js?v=2ce224bc"></script>
 </body>
 </html>
