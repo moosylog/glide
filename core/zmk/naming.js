@@ -1,3 +1,3 @@
 /*! GLIDE (c) 2026 Moosy. All rights reserved. See LICENSE.txt. */
 (function(){"use strict";const r=window.GlideCore||(window.GlideCore={}),i="&GLD_ht_",s="&GLD_mm_",e="&GLD_td_";Object.assign(r,{GLIDE_HT_PREFIX:i,GLIDE_MM_PREFIX:s,GLIDE_TD_PREFIX:e,GLIDE_BEHAVIOR_DESCRIPTION:"GLIDE-generated and controlled. Renaming or removing this behavior will break its GLIDE correlation.",isGlideHtName:t=>typeof t=="string"&&t.startsWith(i),isGlideMmName:t=>typeof t=="string"&&t.startsWith(s),isRecognizedTdName:t=>typeof t=="string"&&(t.startsWith("&td_")||t.startsWith(e)),stripGlideHtPrefix:t=>t.slice(i.length),stripGlideMmPrefix:t=>t.slice(s.length),stripTdPrefix:t=>t.startsWith(e)?t.slice(e.length):t.replace("&td_","").replace("auto_","")})})();
-;var _gn="177a9ce35629010c3d521f7e";
+;var _gn="29a02c826bb82af56cd3feb1";
